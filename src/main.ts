@@ -27,7 +27,10 @@ export default class PopupLexiconPlugin extends Plugin {
 		await this.loadSettings();
 
 		this.dict = new DictionaryClient(() => this.settings.wiktionaryEdition);
-		this.popup = new DefinitionPopup(() => this.settings);
+		this.popup = new DefinitionPopup(() => this.settings, (container, result, language) => {
+			const button = container.createEl("button", { text: "+ Add to Dictionary" });
+			button.onclick = () => { new Notice(`Save ${result.word} (${language.name}) — storage coming next.`); };
+		});
 		this.popup.setHoverHandlers(
 			() => this.cancelLeave(),
 			() => this.scheduleLeave()

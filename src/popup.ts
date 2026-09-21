@@ -1,5 +1,5 @@
 import { sanitizeHTMLToDom } from "obsidian";
-import type { DictionaryResult } from "./dictionary";
+import type { DictionaryResult, LangSection } from "./dictionary";
 import type { PopupLexiconSettings } from "./settings";
 
 // A single floating popup that renders dictionary results. Positioned with
@@ -26,7 +26,10 @@ export class DefinitionPopup {
 	private onEnter?: () => void;
 	private onLeave?: () => void;
 
-	constructor(private getSettings: () => PopupLexiconSettings) {}
+	constructor(
+		private getSettings: () => PopupLexiconSettings,
+		private renderActions?: (container: HTMLElement, result: DictionaryResult, language: LangSection) => void
+	) {}
 
 	get word(): string | null {
 		return this.currentWord;
@@ -141,6 +144,7 @@ export class DefinitionPopup {
 					}
 				}
 			}
+			this.renderActions?.(sec.createDiv({ cls: "lexicon-actions" }), result, lang);
 		}
 
 		this.absolutizeLinks(body, result.edition);

@@ -3,7 +3,7 @@
 Build a fast lookup popup and a separate Apple Dictionary-inspired Obsidian ItemView. Preserve upstream lookup, language filtering, modifier behavior and settings. Markdown files are the canonical database; removing the plugin leaves readable vocabulary. Never touch the main vault or overwrite unrelated files.
 
 - [x] 0: Fork, clone, remotes, isolated vault, baseline build/load, rename, architecture
-- [ ] 1: Language-specific popup save action
+- [x] 1: Language-specific popup save action
 - [ ] 2: Markdown store, safe Unicode paths, duplicate detection
 - [ ] 3: Rich portable entries and round-trip parser
 - [ ] 4: Source-note encounters; append without replacing user content
