@@ -175,3 +175,6 @@
  .lexicon-pane { padding: 24px 18px; }
  .lexicon-search-form input { width: 150px; }
 }
+.lexicon-navigation { display: flex; gap: 2px; }
+.lexicon-navigation button { box-shadow: none; background: transparent; font-size: 21px; padding: 0 9px; color: var(--text-muted); }
+.lexicon-navigation button:disabled { opacity: .3; }

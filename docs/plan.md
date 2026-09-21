@@ -10,7 +10,7 @@ Build a fast lookup popup and a separate Apple Dictionary-inspired Obsidian Item
 - [x] 5: Manual search reusing DictionaryClient
 - [x] 6: Rebuildable local index, live edits/deletes/renames
 - [x] 7: ItemView, dynamic languages, local search, shared definition renderer
-- [ ] 8: Back/forward, local-first exploration
+- [x] 8: Back/forward, local-first exploration
 
 ## Data and behavior
 

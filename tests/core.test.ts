@@ -89,3 +89,18 @@ test('encounters append atomically without replacing manual notes or repeating c
  assert.equal((await store.read(saved.path))!.entry.encounters?.length, 2);
  assert.ok(vault.contents.get(saved.path)!.endsWith('## My notes\n\nKeep this exact text.\n'));
 });
+
+import { NavigationHistory } from '../src/dictionary-view/history';
+import { searchKey } from '../src/vocabulary/vocabularyIndex';
+test('history goes back/forward, replaces repeated entries and truncates a branched future', () => {
+ const history = new NavigationHistory<string>(value => value, 3);
+ history.push('a'); history.push('a'); assert.equal(history.canBack, false);
+ history.push('b'); history.push('c'); assert.equal(history.back(), 'b');
+ assert.equal(history.back(), 'a'); assert.equal(history.back(), undefined);
+ assert.equal(history.forward(), 'b'); history.push('d'); assert.equal(history.canForward, false);
+ assert.equal(history.back(), 'b');
+});
+test('instant local search folds accents while preserving multilingual text', () => {
+ assert.equal(searchKey('DÉMARCHE'), 'demarche'); assert.equal(searchKey('de\u0301marche'), 'demarche');
+ assert.equal(searchKey('日本語'), '日本語');
+});

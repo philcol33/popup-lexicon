@@ -1,8 +1,10 @@
+import { NavigationHistory } from "./history";
+import { getWordAtPoint } from "../wordDetection";
 import { Component, ItemView, type WorkspaceLeaf } from 'obsidian';
 import type PopupLexiconPlugin from '../main';
 import { fromWiktionary } from '../vocabulary/adapter';
 import { renderEntryActions } from '../vocabulary/actions';
-import { normalizeWord, type SavedEntry } from '../vocabulary/types';
+import { entryKey, normalizeWord, type SavedEntry } from '../vocabulary/types';
 import { renderDefinition } from './DefinitionView';
 import { WordList } from './WordList';
 
@@ -10,6 +12,9 @@ export const DICTIONARY_VIEW = 'popup-lexicon-dictionary';
 type DisplayEntry = Omit<SavedEntry, 'path'> & { path?: string };
 
 export class DictionaryView extends ItemView {
+	private history = new NavigationHistory<DisplayEntry>(value => entryKey(value.entry));
+	private backButton!: HTMLButtonElement;
+	private forwardButton!: HTMLButtonElement;
 	private query = '';
 	private language = '';
 	private current?: DisplayEntry;
@@ -29,7 +34,13 @@ export class DictionaryView extends ItemView {
 		this.contentEl.empty(); this.contentEl.addClass('lexicon-view');
 		this.rendered.load();
 		const toolbar = this.contentEl.createDiv({ cls: 'lexicon-toolbar' });
-		toolbar.createDiv({ cls: 'lexicon-app-title', text: 'Dictionary' });
+		const navigation = toolbar.createDiv({ cls: 'lexicon-navigation' });
+		this.backButton = navigation.createEl('button', { text: '←', attr: { 'aria-label': 'Back', title: 'Back' } });
+		this.forwardButton = navigation.createEl('button', { text: '→', attr: { 'aria-label': 'Forward', title: 'Forward' } });
+		this.backButton.onclick = () => { void this.navigate(this.history.back()); };
+		this.forwardButton.onclick = () => { void this.navigate(this.history.forward()); };
+		this.updateNavigation();
+		toolbar.createDiv({ cls: 'lexicon-app-title' , text: 'Dictionary' });
 		const form = toolbar.createEl('form', { cls: 'lexicon-search-form' });
 		this.searchInput = form.createEl('input', { type: 'search', placeholder: 'Search words', attr: { 'aria-label': 'Search saved words' } });
 		this.searchInput.oninput = () => { this.query = this.searchInput.value; this.refreshList(true); };
@@ -42,6 +53,15 @@ export class DictionaryView extends ItemView {
 		this.count = sidebar.createDiv({ cls: 'lexicon-count', attr: { 'aria-live': 'polite' } });
 		this.list = new WordList(sidebar.createDiv(), saved => { void this.show(saved); });
 		this.pane = split.createDiv({ cls: 'lexicon-pane' });
+		this.pane.title = 'Option/Alt-click a word in a definition to look it up';
+		this.pane.addEventListener('click', event => {
+			if (!event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
+			const target = event.target as Element;
+			if (!target.closest('.lexicon-meanings')) return;
+			event.preventDefault();
+			const hit = getWordAtPoint(this.pane.ownerDocument, event.clientX, event.clientY);
+			if (hit) void this.lookup(hit.word);
+		}, true);
 		this.unsubscribe = this.plugin.index.subscribe(() => { void this.indexChanged(); });
 		await this.plugin.index.ready;
 		this.refreshList();
@@ -53,7 +73,7 @@ export class DictionaryView extends ItemView {
 		this.refreshList();
 		if (this.current) {
 			const saved = this.plugin.index.find(this.current.entry);
-			if (saved) await this.show(saved);
+			if (saved) await this.show(saved, false);
 			else if (this.current.path) { this.current = undefined; this.emptyState('This entry was deleted or moved outside the dictionary folder.'); }
 		}
 	}
@@ -86,7 +106,23 @@ export class DictionaryView extends ItemView {
 		const button = empty.createEl('button', { text: 'Find your first word', cls: 'mod-cta' });
 		button.onclick = () => this.searchInput.focus();
 	}
-	private async show(value: DisplayEntry): Promise<void> {
+	private updateNavigation(): void {
+		this.backButton.disabled = !this.history.canBack;
+		this.forwardButton.disabled = !this.history.canForward;
+	}
+	private async navigate(value?: DisplayEntry): Promise<void> {
+		this.updateNavigation();
+		if (!value) return;
+		const saved = this.plugin.index.find(value.entry);
+		if (value.path && !saved) {
+			this.generation++; this.current = undefined;
+			this.emptyState('This history entry was deleted or moved outside the dictionary.'); return;
+		}
+		await this.show(saved || value, false);
+	}
+	private async show(value: DisplayEntry, record = true): Promise<void> {
+		if (record) this.history.push(value);
+		this.updateNavigation();
 		const generation = ++this.generation;
 		this.current = value;
 		this.rendered.unload(); this.rendered = new Component(); this.rendered.load();
@@ -108,11 +144,14 @@ export class DictionaryView extends ItemView {
 			if (generation !== this.generation) return;
 			if (!result) { this.emptyState(`No definition found for “${word}”.`); return; }
 			const preferred = this.plugin.settings.preferredLanguages.split(/[,\s]+/);
-			const first = result.langs.find(lang => lang.code === this.language) || result.langs.find(lang => preferred.includes(lang.code)) || result.langs[0];
+			const allow = this.plugin.settings.filterLanguages.toLowerCase().split(/[,\s]+/).filter(Boolean);
+			const filtered = result.langs.filter(lang => allow.includes(lang.code.toLowerCase()));
+			const languages = filtered.length ? filtered : result.langs;
+			const first = languages.find(lang => lang.code === this.language) || languages.find(lang => preferred.includes(lang.code)) || languages[0];
 			await this.show({ entry: fromWiktionary(result, first) });
 			const choices = this.pane.createDiv({ cls: 'lexicon-result-languages' });
 			this.pane.prepend(choices);
-			for (const lang of result.langs) choices.createEl('button', { text: lang.name }).onclick = () => {
+			for (const lang of languages) choices.createEl('button', { text: lang.name }).onclick = () => {
 				void this.show({ entry: fromWiktionary(result, lang) }).then(() => this.pane.prepend(choices));
 			};
 		} catch (e) { if (generation === this.generation) this.emptyState(e instanceof Error ? e.message : 'Lookup failed.'); }
