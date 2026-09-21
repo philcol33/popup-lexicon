@@ -1,0 +1,81 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { writeMarkdown, parseMarkdown } from '../src/vocabulary/markdown';
+import { dictionaryRoot, safeFilename } from '../src/vocabulary/paths';
+import { VocabularyStore } from '../src/vocabulary/vocabularyStore';
+import { TFile, TFolder } from 'obsidian';
+import type { DictionaryEntry } from '../src/vocabulary/types';
+
+const entry: DictionaryEntry = {
+ word: 'démarche', languageCode: 'fr', languageName: 'French',
+ pronunciation: 'də.maʁʃ', aliases: ['approche'],
+ partsOfSpeech: [{ type: 'noun', meanings: [{ definition: 'An **approach** or way of proceeding.', examples: ['Cette démarche est utile.', 'Another example.'], synonyms: ['approach'] }, { definition: 'A step.' }] }],
+ etymology: 'From French.', source: { provider: 'Wiktionary', url: 'https://en.wiktionary.org/wiki/d%C3%A9marche', license: 'CC BY-SA 4.0' },
+ encounters: [{ sourcePath: 'Reading/Notes [test].md', context: 'Cette démarche est utile.', date: '2026-09-21' }]
+};
+class MemoryVault {
+ files = new Map<string, TFile | TFolder>(); contents = new Map<string, string>();
+ getAbstractFileByPath(path: string) { return this.files.get(path) || null; }
+ getMarkdownFiles() { return [...this.files.values()].filter(f => f instanceof TFile); }
+ async cachedRead(file: TFile) { return this.contents.get(file.path)!; }
+ async createFolder(path: string) { if (this.files.has(path)) throw Error('Exists'); const folder = new TFolder(path); this.files.set(path, folder); return folder; }
+ async create(path: string, data: string) { if (this.files.has(path)) throw Error('Exists'); const file = new TFile(path); this.files.set(path, file); this.contents.set(path, data); return file; }
+ async process(file: TFile, fn: (data: string) => string) { const data = fn(this.contents.get(file.path)!); this.contents.set(file.path, data); return data; }
+}
+const setup = () => { const vault = new MemoryVault(); return { vault, store: new VocabularyStore(vault as never, () => 'Dictionary') }; };
+
+test('portable Markdown round-trips all available fields, examples and Unicode', () => {
+ const parsed = parseMarkdown(writeMarkdown(entry))!;
+ assert.deepEqual(parsed.partsOfSpeech, entry.partsOfSpeech);
+ assert.deepEqual(parsed.encounters, entry.encounters);
+ assert.equal(parsed.pronunciation, entry.pronunciation);
+ assert.equal(parsed.etymology, entry.etymology);
+ assert.equal(parsed.source?.url, entry.source?.url);
+ assert.ok(!writeMarkdown(entry).includes('partsOfSpeech:'));
+});
+test('manual body edits are authoritative and missing optional fields work', () => {
+ const parsed = parseMarkdown(writeMarkdown(entry).replace('A step.', 'An edited action.'))!;
+ assert.equal(parsed.partsOfSpeech[0].meanings[1].definition, 'An edited action.');
+ const minimal = parseMarkdown('---\nword: 猫\nlanguage: ja\n---\n# 猫\n\n## noun\n\n1. A cat.\n')!;
+ assert.equal(minimal.word, '猫'); assert.equal(minimal.pronunciation, undefined);
+ assert.equal(parseMarkdown('---\nword: [broken\n---\n'), null);
+});
+test('Unicode, apostrophes, hyphens and filename safety', () => {
+ for (const word of ['démarche', "l'esprit", 'well-being', '日本語', 'Lëtzebuergesch']) assert.equal(safeFilename(word), word);
+ assert.equal(safeFilename('de\u0301marche'), 'démarche');
+ assert.equal(safeFilename('../../bad:*?'), '_.._bad___');
+ assert.ok(new TextEncoder().encode(safeFilename('猫'.repeat(150))).length <= 180);
+ for (const root of ['../main', '/tmp', '.obsidian', 'Dictionary/../main', 'A//B', 'A\\B']) assert.throws(() => dictionaryRoot(root));
+ assert.equal(dictionaryRoot('Vocabulary/Words/'), 'Vocabulary/Words');
+});
+test('concurrent duplicate saves never overwrite; language identity remains separate', async () => {
+ const { vault, store } = setup();
+ const results = await Promise.all([store.save(entry), store.save({ ...entry, word: 'de\u0301marche' })]);
+ assert.equal(results.filter(r => r.created).length, 1);
+ const original = vault.contents.get(results[0].saved.path);
+ await store.save({ ...entry, partsOfSpeech: [] });
+ assert.equal(vault.contents.get(results[0].saved.path), original);
+ await store.save({ ...entry, languageCode: 'en', languageName: 'English' });
+ assert.equal((await store.list()).length, 2);
+});
+test('unrelated files and sanitized filename collisions are preserved', async () => {
+ const { vault, store } = setup();
+ await vault.create('Dictionary/French/démarche.md', 'My personal note');
+ const saved = await store.save(entry);
+ assert.equal(saved.saved.path, 'Dictionary/French/démarche (2).md');
+ assert.equal(vault.contents.get('Dictionary/French/démarche.md'), 'My personal note');
+ await store.save({ ...entry, word: 'a/b' });
+ await store.save({ ...entry, word: 'a:b' });
+ assert.equal((await store.list()).length, 3);
+});
+test('offline enumeration follows manual changes, deletion and language folder rename', async () => {
+ const { vault, store } = setup();
+ assert.deepEqual(await store.list(), []);
+ const { saved } = await store.save(entry);
+ const body = vault.contents.get(saved.path)!;
+ vault.files.delete(saved.path); vault.contents.delete(saved.path);
+ await vault.create('Dictionary/Français/renamed.md', body.replace('word: démarche', 'word: néanmoins'));
+ assert.equal((await store.list())[0].entry.word, 'néanmoins');
+ assert.equal((await store.list())[0].path, 'Dictionary/Français/renamed.md');
+ vault.files.clear(); assert.deepEqual(await store.list(), []);
+});

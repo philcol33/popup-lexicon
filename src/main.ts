@@ -1,3 +1,5 @@
+import { VocabularyStore } from "./vocabulary/vocabularyStore";
+import { fromWiktionary, forSaving } from "./vocabulary/adapter";
 import { Notice, Plugin } from "obsidian";
 import {
 	DEFAULT_SETTINGS,
@@ -14,7 +16,8 @@ const LEAVE_GRACE_MS = 200;
 export default class PopupLexiconPlugin extends Plugin {
 	settings: PopupLexiconSettings;
 
-	private dict: DictionaryClient;
+	dict: DictionaryClient;
+	store: VocabularyStore;
 	private popup: DefinitionPopup;
 
 	// hover state
@@ -27,9 +30,21 @@ export default class PopupLexiconPlugin extends Plugin {
 		await this.loadSettings();
 
 		this.dict = new DictionaryClient(() => this.settings.wiktionaryEdition);
+		this.store = new VocabularyStore(this.app.vault, () => this.settings.dictionaryRoot);
 		this.popup = new DefinitionPopup(() => this.settings, (container, result, language) => {
-			const button = container.createEl("button", { text: "+ Add to Dictionary" });
-			button.onclick = () => { new Notice(`Save ${result.word} (${language.name}) — storage coming next.`); };
+			if (!this.settings.showAddButton) return;
+			const entry = fromWiktionary(result, language);
+			const button = container.createEl('button', { text: '+ Add to Dictionary' });
+			void this.store.find(entry).then(saved => { if (saved) button.textContent = '✓ Saved · Open entry'; });
+			button.onclick = async () => {
+				button.disabled = true;
+				try {
+					const { saved, created } = await this.store.save(forSaving(entry, this.settings));
+					button.textContent = '✓ Saved · Open entry';
+					if (!created || this.settings.openAfterSaving) await this.app.workspace.openLinkText(saved.path, '', true);
+				} catch (e) { new Notice(errorMessage(e)); }
+				finally { button.disabled = false; }
+			};
 		});
 		this.popup.setHoverHandlers(
 			() => this.cancelLeave(),

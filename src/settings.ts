@@ -5,6 +5,15 @@ export type SelectionTrigger = "command" | "auto";
 export type HoverModifier = "ctrl" | "alt" | "shift" | "none";
 
 export interface PopupLexiconSettings {
+ dictionaryRoot: string;
+ saveExamples: boolean;
+ saveAllDefinitions: boolean;
+ savePronunciation: boolean;
+ saveEtymology: boolean;
+ saveContext: boolean;
+ openAfterSaving: boolean;
+ preferredLanguages: string;
+ showAddButton: boolean;
 	/** Wiktionary edition to query; also the language the glosses are written in. */
 	wiktionaryEdition: string;
 	/** Comma-separated language codes to show; empty = show all. */
@@ -19,6 +28,9 @@ export interface PopupLexiconSettings {
 }
 
 export const DEFAULT_SETTINGS: PopupLexiconSettings = {
+ dictionaryRoot: 'Dictionary', saveExamples: true, saveAllDefinitions: true,
+ savePronunciation: true, saveEtymology: true, saveContext: true,
+ openAfterSaving: false, preferredLanguages: '', showAddButton: true,
 	wiktionaryEdition: "en",
 	filterLanguages: "",
 	triggerOnSelection: "command",
