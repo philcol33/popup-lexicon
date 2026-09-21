@@ -27,3 +27,16 @@ At each implementation stage run typecheck/build and available tests. Add storag
 ## Deferred
 
 Favorites UI, spaced repetition, audio/TTS, translation, import/export, integrations and mobile-specific polish. No Apple assets/fonts. Hot Reload optional, not required.
+
+## Accepted clarification — native definitions
+
+- [x] Native-language definitions for non-English entries, never implicit English gloss fallback
+- [x] Polish → German translations
+- [x] Definition-language/content-kind metadata in saved Markdown
+- [x] Native source URLs, available pronunciation and etymology
+- [x] Lazy loading and request coalescing to avoid fan-out on ambiguous words
+- [x] Regression tests for French/German/Polish routing and unavailable native sources
+
+## Remaining scope
+
+Native Wiktionary template coverage can be extended with more edition adapters. A page with no native definition cannot supply one; no translations or invented definitions are substituted. Automatic refresh/replacement of existing user vocabulary, pronunciation audio, mobile-specific interaction polish and full-text search remain future work. Current saves intentionally preserve existing entries.
