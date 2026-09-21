@@ -1,3 +1,4 @@
+import { DictionaryView, DICTIONARY_VIEW } from "./dictionary-view/DictionaryView";
 import { VocabularyIndex } from "./vocabulary/vocabularyIndex";
 import { DictionarySearchModal } from "./dictionary-view/SearchModal";
 import { renderEntryActions } from "./vocabulary/actions";
@@ -56,6 +57,9 @@ export default class PopupLexiconPlugin extends Plugin {
 			callback: () => this.lookupSelection(true),
 		});
 
+		this.registerView(DICTIONARY_VIEW, leaf => new DictionaryView(leaf, this));
+		this.addCommand({ id: 'open-dictionary', name: 'Open Dictionary', callback: () => { void this.openDictionary(); } });
+		this.addRibbonIcon('book-open', 'Open Dictionary', () => { void this.openDictionary(); });
 		this.addCommand({ id: 'search-dictionary', name: 'Search Dictionary', callback: () => new DictionarySearchModal(this).open() });
 
 		// Automatic lookup when a word is selected (if enabled).
@@ -109,6 +113,12 @@ export default class PopupLexiconPlugin extends Plugin {
 		this.cancelLeave();
 		if (this.selectionTimer !== null) window.clearTimeout(this.selectionTimer);
 		this.popup?.hide();
+	}
+
+	async openDictionary(): Promise<void> {
+		const leaf = this.app.workspace.getLeavesOfType(DICTIONARY_VIEW)[0] || this.app.workspace.getLeaf('tab');
+		await leaf.setViewState({ type: DICTIONARY_VIEW, active: true });
+		await this.app.workspace.revealLeaf(leaf);
 	}
 
 	async loadSettings(): Promise<void> {
