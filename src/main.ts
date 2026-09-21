@@ -1,3 +1,4 @@
+import { VocabularyIndex } from "./vocabulary/vocabularyIndex";
 import { DictionarySearchModal } from "./dictionary-view/SearchModal";
 import { renderEntryActions } from "./vocabulary/actions";
 import { captureEncounter } from "./vocabulary/context";
@@ -22,6 +23,7 @@ export default class PopupLexiconPlugin extends Plugin {
 
 	dict: DictionaryClient;
 	store: VocabularyStore;
+	index: VocabularyIndex;
 	private popup: DefinitionPopup;
 	private currentEncounter?: Encounter;
 
@@ -36,6 +38,7 @@ export default class PopupLexiconPlugin extends Plugin {
 
 		this.dict = new DictionaryClient(() => this.settings.wiktionaryEdition);
 		this.store = new VocabularyStore(this.app.vault, () => this.settings.dictionaryRoot);
+		this.index = this.addChild(new VocabularyIndex(this.store));
 		this.popup = new DefinitionPopup(() => this.settings, (container, result, language) => {
 			if (!this.settings.showAddButton) return;
 			renderEntryActions(container, this, fromWiktionary(result, language), this.currentEncounter);
@@ -115,6 +118,7 @@ export default class PopupLexiconPlugin extends Plugin {
 
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
+		await this.index?.refresh();
 	}
 
 	// ---- Selection ----------------------------------------------------------

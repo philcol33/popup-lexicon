@@ -22,7 +22,7 @@ export function renderEntryActions(container: HTMLElement, plugin: PopupLexiconP
 			};
 		}
 	};
-	void plugin.store.find(entry).then(found => { saved = found; refresh(); }).catch(e => new Notice(String(e)));
+	void plugin.index.ready.then(() => { saved = plugin.index.find(entry); refresh(); }).catch(e => new Notice(String(e)));
 	save.onclick = async () => {
 		save.disabled = true;
 		try {
