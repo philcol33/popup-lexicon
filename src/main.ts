@@ -1,5 +1,8 @@
+import { renderEntryActions } from "./vocabulary/actions";
+import { captureEncounter } from "./vocabulary/context";
+import type { Encounter } from "./vocabulary/types";
 import { VocabularyStore } from "./vocabulary/vocabularyStore";
-import { fromWiktionary, forSaving } from "./vocabulary/adapter";
+import { fromWiktionary } from "./vocabulary/adapter";
 import { Notice, Plugin } from "obsidian";
 import {
 	DEFAULT_SETTINGS,
@@ -19,6 +22,7 @@ export default class PopupLexiconPlugin extends Plugin {
 	dict: DictionaryClient;
 	store: VocabularyStore;
 	private popup: DefinitionPopup;
+	private currentEncounter?: Encounter;
 
 	// hover state
 	private hoverTimer: number | null = null;
@@ -33,18 +37,7 @@ export default class PopupLexiconPlugin extends Plugin {
 		this.store = new VocabularyStore(this.app.vault, () => this.settings.dictionaryRoot);
 		this.popup = new DefinitionPopup(() => this.settings, (container, result, language) => {
 			if (!this.settings.showAddButton) return;
-			const entry = fromWiktionary(result, language);
-			const button = container.createEl('button', { text: '+ Add to Dictionary' });
-			void this.store.find(entry).then(saved => { if (saved) button.textContent = '✓ Saved · Open entry'; });
-			button.onclick = async () => {
-				button.disabled = true;
-				try {
-					const { saved, created } = await this.store.save(forSaving(entry, this.settings));
-					button.textContent = '✓ Saved · Open entry';
-					if (!created || this.settings.openAfterSaving) await this.app.workspace.openLinkText(saved.path, '', true);
-				} catch (e) { new Notice(errorMessage(e)); }
-				finally { button.disabled = false; }
-			};
+			renderEntryActions(container, this, fromWiktionary(result, language), this.currentEncounter);
 		});
 		this.popup.setHoverHandlers(
 			() => this.cancelLeave(),
@@ -139,7 +132,7 @@ export default class PopupLexiconPlugin extends Plugin {
 			}
 			return;
 		}
-		void this.run(hit.word, hit.rect);
+		void this.run(hit.word, hit.rect, window.getSelection()?.anchorNode || null);
 	}
 
 	// ---- Hover --------------------------------------------------------------
@@ -172,7 +165,7 @@ export default class PopupLexiconPlugin extends Plugin {
 		if (hit.word === this.hoverWord && this.popup.isVisible()) return;
 		this.hoverWord = hit.word;
 		this.cancelLeave();
-		void this.run(hit.word, hit.range.getBoundingClientRect());
+		void this.run(hit.word, hit.range.getBoundingClientRect(), hit.range.startContainer);
 	}
 
 	private modifierMatches(evt: MouseEvent): boolean {
@@ -217,7 +210,8 @@ export default class PopupLexiconPlugin extends Plugin {
 
 	// ---- Shared lookup + render --------------------------------------------
 
-	private async run(word: string, anchor: Anchor): Promise<void> {
+	private async run(word: string, anchor: Anchor, node: Node | null = null): Promise<void> {
+		this.currentEncounter = this.settings.saveContext ? captureEncounter(this.app, node, word) : undefined;
 		this.popup.showLoading(anchor, word);
 		try {
 			const result = await this.dict.lookup(word);

@@ -79,3 +79,13 @@ test('offline enumeration follows manual changes, deletion and language folder r
  assert.equal((await store.list())[0].path, 'Dictionary/Français/renamed.md');
  vault.files.clear(); assert.deepEqual(await store.list(), []);
 });
+test('encounters append atomically without replacing manual notes or repeating context', async () => {
+ const { vault, store } = setup();
+ const { saved } = await store.save(entry);
+ vault.contents.set(saved.path, vault.contents.get(saved.path)! + '\n## My notes\n\nKeep this exact text.\n');
+ const encounter = { sourcePath: 'Another note.md', context: 'A second démarche.', date: '2026-09-22' };
+ assert.equal(await store.appendEncounter(saved.path, encounter), true);
+ assert.equal(await store.appendEncounter(saved.path, encounter), false);
+ assert.equal((await store.read(saved.path))!.entry.encounters?.length, 2);
+ assert.ok(vault.contents.get(saved.path)!.endsWith('## My notes\n\nKeep this exact text.\n'));
+});
