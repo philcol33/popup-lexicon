@@ -16,6 +16,8 @@ export function writeMarkdown(entry: DictionaryEntry): string {
 		lexicon: 1, word: entry.word, language: entry.languageCode,
 		language_name: entry.languageName, created: entry.created || new Date().toISOString(),
 	};
+	if (entry.definitionLanguage) metadata.definition_language = entry.definitionLanguage;
+	if (entry.contentKind) metadata.content_kind = entry.contentKind;
 	if (entry.aliases?.length) metadata.aliases = entry.aliases;
 	if (entry.pronunciation) metadata.pronunciation = entry.pronunciation;
 	if (entry.phonetics?.length) metadata.phonetics = entry.phonetics;
@@ -56,7 +58,8 @@ export function parseMarkdown(markdown: string): DictionaryEntry | null {
 	const word = text(meta.word), code = text(meta.language);
 	if (!word || !code) return null;
 	const entry: DictionaryEntry = {
-		word, languageCode: code, languageName: text(meta.language_name) || code,
+		word, definitionLanguage: text(meta.definition_language), contentKind: meta.content_kind === 'translation' ? 'translation' : meta.content_kind === 'definition' ? 'definition' : undefined,
+		languageCode: code, languageName: text(meta.language_name) || code,
 		aliases: strings(meta.aliases) || (text(meta.aliases) ? [meta.aliases as string] : undefined),
 		pronunciation: text(meta.pronunciation), phonetics: strings(meta.phonetics),
 		created: text(meta.created), partsOfSpeech: [], encounters: [],

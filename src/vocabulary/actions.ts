@@ -1,10 +1,24 @@
 import { Notice } from 'obsidian';
 import type PopupLexiconPlugin from '../main';
-import { forSaving } from './adapter';
+import { forSaving, fromWiktionary } from './adapter';
 import type { DictionaryEntry, Encounter, SavedEntry } from './types';
 
 /** The same small action row is used by popup, modal and browser. */
-export function renderEntryActions(container: HTMLElement, plugin: PopupLexiconPlugin, entry: DictionaryEntry, encounter?: Encounter): void {
+export function renderEntryActions(container: HTMLElement, plugin: PopupLexiconPlugin, entry: DictionaryEntry, encounter?: Encounter, onResolved?: (entry: DictionaryEntry) => void | Promise<void>): void {
+	if (entry.needsLookup || entry.unavailable) {
+		if (onResolved) {
+			const load = container.createEl('button', { text: entry.needsLookup ? (entry.contentKind === 'translation' ? 'Load translations' : 'Load native definition') : 'Retry lookup' });
+			load.onclick = async () => {
+				load.disabled = true; load.textContent = 'Loading…';
+				try {
+					const language = await plugin.dict.lookupLanguage(entry.word, { code: entry.languageCode, name: entry.languageName, entries: [] });
+					await onResolved(fromWiktionary({ word: entry.word, edition: language.edition || entry.languageCode, url: language.sourceUrl || '', langs: [language] }, language));
+				} catch (e) { new Notice(String(e)); load.textContent = 'Retry lookup'; load.disabled = false; }
+			};
+		}
+		return;
+	}
+	if (!entry.partsOfSpeech.length) return;
 	const save = container.createEl('button', { text: '+ Add to Dictionary' });
 	let saved: SavedEntry | undefined;
 	let append: HTMLButtonElement | undefined;

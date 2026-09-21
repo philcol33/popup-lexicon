@@ -1,3 +1,4 @@
+import type { DictionaryEntry } from "../vocabulary/types";
 import { Component, Modal } from 'obsidian';
 import type PopupLexiconPlugin from '../main';
 import { fromWiktionary } from '../vocabulary/adapter';
@@ -37,9 +38,15 @@ export class DictionarySearchModal extends Modal {
 			for (const lang of filtered.length ? filtered : result.langs) {
 				const entry = fromWiktionary(result, lang);
 				const section = root.createEl('section');
-				await renderDefinition(this.app, section, entry, this.rendered);
+				const paint = async (value: DictionaryEntry) => {
+					if (generation !== this.generation) return;
+					section.empty();
+					await renderDefinition(this.app, section, value, this.rendered, '', () => generation === this.generation);
+					if (generation !== this.generation) return;
+					renderEntryActions(section.createDiv({ cls: 'lexicon-actions' }), this.plugin, value, undefined, paint);
+				};
+				await paint(entry);
 				if (generation !== this.generation) return;
-				renderEntryActions(section.createDiv({ cls: 'lexicon-actions' }), this.plugin, entry);
 			}
 		} catch (e) {
 			if (generation === this.generation) { root.empty(); root.createDiv({ cls: 'lexicon-status', text: e instanceof Error ? e.message : 'Lookup failed.' }); }

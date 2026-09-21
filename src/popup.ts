@@ -21,6 +21,8 @@ const MAX_EXAMPLES = 3;
 
 export class DefinitionPopup {
 	private el: HTMLElement | null = null;
+	private lastAnchor?: Anchor;
+	private currentResult?: DictionaryResult;
 	private pinned = false;
 	private currentWord: string | null = null;
 	private onEnter?: () => void;
@@ -84,6 +86,7 @@ export class DefinitionPopup {
 	}
 
 	showResult(anchor: Anchor, result: DictionaryResult): void {
+		this.lastAnchor = anchor; this.currentResult = result;
 		this.currentWord = result.word;
 		const settings = this.getSettings();
 		const el = this.reset();
@@ -117,6 +120,9 @@ export class DefinitionPopup {
 				text: lang.name,
 			});
 
+			if (lang.pronunciation) sec.createDiv({ cls: 'lexicon-phonetics', text: lang.pronunciation });
+			if (lang.unavailable) sec.createDiv({ cls: 'popup-lexicon-status', text: lang.unavailable });
+			if (lang.sourceUrl) sec.createEl('a', { cls: 'popup-lexicon-source', text: 'Source ↗', href: lang.sourceUrl, attr: { target: '_blank', rel: 'noopener' } });
 			for (const entry of lang.entries) {
 				if (entry.partOfSpeech) {
 					sec.createDiv({
@@ -144,11 +150,20 @@ export class DefinitionPopup {
 					}
 				}
 			}
+			if (lang.etymology) {
+				const details = sec.createEl('details'); details.createEl('summary', { text: 'Etymology' });
+				details.createDiv().appendChild(sanitizeHTMLToDom(lang.etymology));
+			}
+			this.absolutizeLinks(sec, lang.edition || result.edition);
 			this.renderActions?.(sec.createDiv({ cls: "lexicon-actions" }), result, lang);
 		}
 
-		this.absolutizeLinks(body, result.edition);
 		this.position(anchor);
+	}
+
+	replaceLanguage(word: string, language: LangSection): void {
+		if (this.word !== word || !this.currentResult || !this.lastAnchor) return;
+		this.showResult(this.lastAnchor, { ...this.currentResult, langs: this.currentResult.langs.map(lang => lang.code === language.code ? language : lang) });
 	}
 
 	hide(): void {
@@ -190,7 +205,11 @@ export class DefinitionPopup {
 		const base = `https://${edition}.wiktionary.org`;
 		root.findAll("a").forEach((a) => {
 			const href = a.getAttribute("href") || "";
-			if (href.startsWith("./")) {
+			if (href.startsWith("//")) {
+				a.setAttribute("href", `https:${href}`);
+			} else if (href.startsWith("#")) {
+				a.setAttribute("href", `${base}/wiki/${encodeURIComponent(this.currentWord || "")}${href}`);
+			} else if (href.startsWith("./")) {
 				a.setAttribute("href", `${base}/wiki/${href.slice(2)}`);
 			} else if (href.startsWith("/")) {
 				a.setAttribute("href", `${base}${href}`);

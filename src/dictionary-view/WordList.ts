@@ -25,7 +25,7 @@ export class WordList {
 		this.paint();
 	}
 	private paint(): void {
-		const start = Math.max(0, Math.floor(this.root.scrollTop / ROW_HEIGHT) - 5);
+		const start = Math.min(Math.max(0, this.items.length - 1), Math.max(0, Math.floor(this.root.scrollTop / ROW_HEIGHT) - 5));
 		const end = Math.min(this.items.length, start + Math.ceil((this.root.clientHeight || 600) / ROW_HEIGHT) + 12);
 		this.root.empty();
 		this.root.createDiv().style.height = `${start * ROW_HEIGHT}px`;

@@ -58,7 +58,7 @@ export class DictionaryView extends ItemView {
 			if (!event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
 			const target = event.target as Element;
 			if (!target.closest('.lexicon-meanings')) return;
-			event.preventDefault();
+			event.preventDefault(); event.stopPropagation();
 			const hit = getWordAtPoint(this.pane.ownerDocument, event.clientX, event.clientY);
 			if (hit) void this.lookup(hit.word);
 		}, true);
@@ -74,7 +74,7 @@ export class DictionaryView extends ItemView {
 		if (this.current) {
 			const saved = this.plugin.index.find(this.current.entry);
 			if (saved) await this.show({ ...saved, alternatives: this.current.alternatives }, false);
-			else if (this.current.path) { this.current = undefined; this.emptyState('This entry was deleted or moved outside the dictionary folder.'); }
+			else if (this.current.path) { this.generation++; this.rendered.unload(); this.current = undefined; this.emptyState('This entry was deleted or moved outside the dictionary folder.'); }
 		}
 	}
 	private refreshList(reset = false): void {
@@ -129,10 +129,13 @@ export class DictionaryView extends ItemView {
 		this.pane.empty();
 		const article = this.pane.createEl('article');
 		this.refreshList();
-		try { await renderDefinition(this.app, article, value.entry, this.rendered, value.path || ''); }
+		try { await renderDefinition(this.app, article, value.entry, this.rendered, value.path || '', () => generation === this.generation); }
 		catch (e) { if (generation === this.generation) this.emptyState(e instanceof Error ? e.message : 'Could not display entry.'); return; }
 		if (generation !== this.generation) return;
-		renderEntryActions(article.createDiv({ cls: 'lexicon-actions' }), this.plugin, value.entry);
+		renderEntryActions(article.createDiv({ cls: 'lexicon-actions' }), this.plugin, value.entry, undefined, async entry => {
+			if (generation !== this.generation) return;
+			await this.show({ ...value, entry, alternatives: value.alternatives?.map(candidate => candidate.languageCode === entry.languageCode ? entry : candidate) }, false);
+		});
 		if (value.alternatives && value.alternatives.length > 1) {
 			const choices = this.pane.createDiv({ cls: 'lexicon-result-languages' }); this.pane.prepend(choices);
 			for (const entry of value.alternatives) {

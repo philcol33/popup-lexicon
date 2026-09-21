@@ -66,3 +66,63 @@ test('adapter keeps language identity, parts of speech and examples without a ne
  assert.equal(value.languageCode, 'lb'); assert.equal(value.partsOfSpeech[0].meanings[0].examples![0], 'Beispill');
  assert.equal(value.pronunciation, undefined);
 });
+
+import { parseNativePage, parsePolishTranslations, fetchNativeSection } from '../src/lookup/nativeWiktionary';
+import { DictionaryClient } from '../src/dictionary';
+import { setRequestHandler } from './obsidian-mock';
+const frenchPage = { title: 'essai', text: '<div class="mw-parser-output"><div class="mw-heading"><h2><span id="fr">Français</span></h2></div><div class="mw-heading"><h3>Étymologie</h3></div><dl><dd>Une origine française.</dd></dl><div class="mw-heading"><h3>Nom commun</h3></div><p><span class="API">\\ɛ.sɛ\\</span></p><ol><li>Une définition en français.<ul><li>Un exemple français.</li></ul></li></ol><div class="mw-heading"><h3>Traductions</h3></div><ol><li>NOT A DEFINITION</li></ol><div class="mw-heading"><h2><span id="en">Anglais</span></h2></div><h3>Nom commun</h3><ol><li>NOT THE FRENCH ENTRY</li></ol></div>' };
+const germanPage = { title: 'Test', text: '<div class="mw-parser-output"><h2>Test (Deutsch)</h2><h3>Substantiv</h3><p>Aussprache:</p><dl><dd><span class="ipa">tɛst</span></dd></dl><p>Bedeutungen:</p><dl><dd>[1] Eine deutsche Definition.</dd></dl><p>Herkunft:</p><dl><dd>Eine Herkunft.</dd></dl><p>Synonyme:</p><dl><dd>[1] Prüfung</dd></dl><p>Beispiele:</p><dl><dd>[1] Ein deutscher Beispielsatz.</dd></dl><h4>Übersetzungen</h4><ol><li>IGNORE</li></ol></div>' };
+const polishPage = { title: 'dom', text: '<h2>dom (<span id="pl">język polski</span>)</h2><dl><dt><span data-field="znaczenia">znaczenia:</span></dt><dd>POLISH DEFINITION MUST NOT BE RETURNED</dd></dl><dl><dt><span data-field="tlumaczenia">tłumaczenia:</span></dt></dl><ul><li>angielski: house</li><li>niemiecki: (1.1) <a href="/wiki/Haus">Haus</a>; (1.2) Zuhause</li></ul><dl><dt><span data-field="zrodla">źródła:</span></dt></dl><h2>dom (another language)</h2>' };
+test('French parser selects French native senses, examples, phonetics and etymology only', () => {
+ const value = parseNativePage(frenchPage, { code: 'fr', name: 'French', entries: [] })!;
+ assert.equal(value.entries.length, 1); assert.equal(value.entries[0].definitions[0].html, 'Une définition en français.');
+ assert.deepEqual(value.entries[0].definitions[0].examples, ['Un exemple français.']);
+ assert.equal(value.pronunciation, 'ɛ.sɛ'); assert.match(value.etymology!, /origine française/);
+ assert.equal(value.definitionLanguage, 'fr'); assert.match(value.sourceUrl!, /^https:\/\/fr\./);
+});
+test('German paragraph labels preserve German definitions and attach sense examples', () => {
+ const value = parseNativePage(germanPage, { code: 'de', name: 'German', entries: [] })!;
+ assert.equal(value.entries.length, 1); assert.equal(value.entries[0].definitions[0].html, 'Eine deutsche Definition.');
+ assert.deepEqual(value.entries[0].definitions[0].examples, ['Ein deutscher Beispielsatz.']);
+ assert.equal(value.pronunciation, 'tɛst');
+});
+test('Polish returns German translations instead of Polish or English definitions', () => {
+ const value = parsePolishTranslations(polishPage, 'de')!;
+ assert.equal(value.definitionLanguage, 'de'); assert.equal(value.contentKind, 'translation');
+ assert.match(value.entries[0].definitions[0].html, /Haus/); assert.doesNotMatch(value.entries[0].definitions[0].html, /house|POLISH DEFINITION/);
+ assert.equal(parsePolishTranslations(polishPage, 'ja'), null);
+});
+test('unsupported native page structures never silently fall back to English glosses', async () => {
+ setRequestHandler(async () => ({ status: 200, json: { parse: { title: 'word', text: '<h2>Other language</h2><ol><li>wrong</li></ol>' } } }));
+ const result = await fetchNativeSection('word', { code: 'lb', name: 'Luxembourgish', entries: [{ partOfSpeech: 'noun', definitions: [{ html: 'English translation', examples: [] }] }] });
+ assert.equal(result.entries.length, 0); assert.ok(result.unavailable);
+});
+test('shared client applies native policy and Polish-to-German routing', async () => {
+ let requests = 0;
+ setRequestHandler(async ({ url }) => {
+  requests++;
+  if (url.includes('fr.wiktionary')) return { status: 200, json: { parse: frenchPage } };
+  if (url.includes('pl.wiktionary')) return { status: 200, json: { parse: polishPage } };
+  return { status: 200, json: { fr: [{ language: 'French', partOfSpeech: 'noun', definitions: [{ definition: 'Wrong English gloss' }] }], pl: [{ language: 'Polish', partOfSpeech: 'noun', definitions: [{ definition: 'Wrong English translation' }] }] } };
+ });
+ const client = new DictionaryClient(() => 'en', () => ({ filterLanguages: '', polishTranslationLanguage: 'de' }));
+ const result = await client.lookup('test');
+ assert.equal(result!.langs[0].definitionLanguage, 'fr'); assert.equal(result!.langs[1].definitionLanguage, 'de');
+ assert.doesNotMatch(JSON.stringify(result), /Wrong English/);
+ await client.lookup('test'); assert.equal(requests, 3);
+ await assert.rejects(client.lookup('x'.repeat(81)), /80 characters/);
+});
+test('ambiguous words load at most two native editions automatically and expose the rest on demand', async () => {
+ const calls: string[] = [];
+ setRequestHandler(async ({ url }) => {
+  calls.push(url);
+  if (url.includes('/w/api.php')) return { status: 200, json: { parse: frenchPage } };
+  return { status: 200, json: Object.fromEntries(['fr', 'de', 'pl', 'ja', 'es'].map(code => [code, [{ language: code, partOfSpeech: 'noun', definitions: [{ definition: 'Discovery gloss' }] }]])) };
+ });
+ const client = new DictionaryClient(() => 'en', () => ({ filterLanguages: '', polishTranslationLanguage: 'de', preferredLanguages: 'fr, de, pl' }));
+ const result = await client.lookup('test');
+ assert.equal(calls.length, 3); assert.equal(result!.langs.filter(lang => lang.needsLookup).length, 3);
+ const deferred = result!.langs.find(lang => lang.code === 'pl')!;
+ await Promise.all([client.lookupLanguage('test', deferred), client.lookupLanguage('test', deferred)]);
+ assert.equal(calls.length, 4);
+});

@@ -8,6 +8,10 @@ export interface Meaning {
 export interface Encounter { sourcePath: string; context: string; date: string }
 export interface DictionaryEntry {
 	word: string;
+	definitionLanguage?: string;
+	contentKind?: 'definition' | 'translation';
+	unavailable?: string;
+	needsLookup?: boolean;
 	languageCode: string;
 	languageName: string;
 	aliases?: string[];

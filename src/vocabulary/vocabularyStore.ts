@@ -68,6 +68,7 @@ export class VocabularyStore {
 	/** Serialize saves so double-clicks and simultaneous views cannot create duplicates. */
 	save(entry: DictionaryEntry): Promise<{ saved: SavedEntry; created: boolean }> {
 		const task = this.queue.then(async () => {
+			if (entry.unavailable) throw new Error("Cannot save an unavailable definition.");
 			const duplicate = await this.find(entry);
 			if (duplicate) return { saved: duplicate, created: false };
 			const folder = `${this.root}/${safeFilename(entry.languageName)}`;

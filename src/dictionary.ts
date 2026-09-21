@@ -1,8 +1,9 @@
+import { fetchNativeSection } from "./lookup/nativeWiktionary";
 import { requestUrl, type RequestUrlResponse } from "obsidian";
 
-// Client for the Wiktionary REST "definition" endpoint, which returns definitions
-// for a word grouped by language. The English edition alone glosses words from
-// thousands of languages, which is what gives this plugin broad language coverage.
+// Upstream REST lookup discovers words/languages and supplies English definitions.
+// The shared client then resolves native definitions (or Polish translations)
+// through the per-edition MediaWiki adapter, with caching and lazy loading.
 
 export interface Definition {
 	/** Definition text as an HTML fragment (contains <a>, <b>, <i>, ...). */
@@ -17,6 +18,14 @@ export interface Entry {
 }
 
 export interface LangSection {
+	edition?: string;
+	sourceUrl?: string;
+	pronunciation?: string;
+	etymology?: string;
+	definitionLanguage?: string;
+	contentKind?: 'definition' | 'translation';
+	unavailable?: string;
+	needsLookup?: boolean;
 	code: string;
 	name: string;
 	entries: Entry[];
@@ -49,8 +58,11 @@ const EDITION_RE = /^[a-z]{2,3}(-[a-z]{2,4})?$/;
 export class DictionaryClient {
 	private cache = new Map<string, DictionaryResult | null>();
 	private inflight = new Map<string, Promise<DictionaryResult | null>>();
+	private nativeCache = new Map<string, { value: LangSection; expires: number }>();
+	private nativeInflight = new Map<string, Promise<LangSection>>();
 
-	constructor(private getEdition: () => string) {}
+	constructor(private getEdition: () => string,
+		private getLanguagePolicy?: () => { filterLanguages: string; polishTranslationLanguage: string; preferredLanguages?: string }) {}
 
 	private normalizeEdition(): string {
 		const e = (this.getEdition() || "en").trim().toLowerCase();
@@ -70,16 +82,38 @@ export class DictionaryClient {
 	async lookup(rawWord: string): Promise<DictionaryResult | null> {
 		const word = rawWord.trim();
 		if (!word) return null;
+		if (word.length > 80) throw new Error("Enter a word or short phrase (up to 80 characters).");
 		const edition = this.normalizeEdition();
-		const key = `${edition}:${word}`;
+		const policy = this.getLanguagePolicy?.();
+		const key = `${edition}:${JSON.stringify(policy)}:${word}`;
 
 		if (this.cache.has(key)) return this.cache.get(key) ?? null;
 		const pending = this.inflight.get(key);
 		if (pending) return pending;
 
 		const promise = this.fetchAndParse(word, edition)
+			.then(async result => {
+				if (!result || !policy) return result;
+				const filter = policy.filterLanguages.toLowerCase().split(/[,\s]+/).filter(Boolean);
+				const filtered = result.langs.filter(lang => filter.includes(lang.code.toLowerCase()));
+				const order = (policy.preferredLanguages || '').toLowerCase().split(/[,\s]+/).filter(Boolean);
+				const rank = (code: string) => { const index = order.indexOf(code); return index < 0 ? Number.MAX_SAFE_INTEGER : index; };
+				const languages = [...(filtered.length ? filtered : result.langs)].sort((a, b) => rank(a.code) - rank(b.code));
+				// At most two automatic native requests. Remaining languages are available on demand.
+				let nativeCount = 0;
+				const resolved = await Promise.all(languages.map(async language => {
+					if (language.code === 'en') return { ...language, definitionLanguage: 'en', contentKind: 'definition' as const };
+					if (++nativeCount <= 2) return this.lookupLanguage(result.word, language);
+					return { ...language, entries: [], needsLookup: true, edition: language.code,
+						sourceUrl: `https://${language.code}.wiktionary.org/wiki/${encodeURIComponent(result.word)}`,
+						definitionLanguage: language.code === 'pl' ? policy.polishTranslationLanguage : language.code,
+						contentKind: language.code === 'pl' ? 'translation' as const : 'definition' as const };
+				}));
+				return { ...result, langs: resolved };
+			})
 			.then((result) => {
-				this.put(key, result);
+				// Failed native lookups are retryable instead of cached for the whole session.
+				if (!result?.langs.some(lang => lang.unavailable)) this.put(key, result);
 				return result;
 			})
 			.finally(() => {
@@ -87,6 +121,21 @@ export class DictionaryClient {
 			});
 		this.inflight.set(key, promise);
 		return promise;
+	}
+
+	/** Shared lazy loader: each native edition request is cached/coalesced across all interfaces. */
+	lookupLanguage(word: string, language: LangSection): Promise<LangSection> {
+		const target = this.getLanguagePolicy?.().polishTranslationLanguage || 'de';
+		const key = `${language.code}:${target}:${word}`;
+		const cached = this.nativeCache.get(key);
+		if (cached && cached.expires > Date.now()) return Promise.resolve(cached.value);
+		const pending = this.nativeInflight.get(key); if (pending) return pending;
+		const request = fetchNativeSection(word, language, target).then(value => {
+			this.nativeCache.set(key, { value, expires: value.unavailable ? Date.now() + 30000 : Infinity });
+			if (this.nativeCache.size > CACHE_LIMIT) this.nativeCache.delete(this.nativeCache.keys().next().value!);
+			return value;
+		}).finally(() => this.nativeInflight.delete(key));
+		this.nativeInflight.set(key, request); return request;
 	}
 
 	private put(key: string, value: DictionaryResult | null): void {
@@ -130,9 +179,8 @@ export class DictionaryClient {
 		if (resp.status === 404) return null;
 		// Wiktionary's definition REST endpoint is implemented only for the
 		// English edition; every other edition answers 501 Not Implemented.
-		// TODO(roadmap): support native-language glosses (fr, el, …) by falling
-		// back to the per-edition MediaWiki action/parse API and parsing the
-		// page HTML, since this REST endpoint will never cover them.
+		// Popup Lexicon uses en here for discovery, then resolves native pages
+		// separately through the same shared client.
 		if (resp.status === 501) {
 			throw new Error(
 				`Wiktionary's definition API only supports the English edition, ` +

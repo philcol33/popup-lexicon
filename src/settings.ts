@@ -7,6 +7,7 @@ export type HoverModifier = "ctrl" | "alt" | "shift" | "none";
 
 export interface PopupLexiconSettings {
  dictionaryRoot: string;
+ polishTranslationLanguage: string;
  saveExamples: boolean;
  saveAllDefinitions: boolean;
  savePronunciation: boolean;
@@ -29,9 +30,9 @@ export interface PopupLexiconSettings {
 }
 
 export const DEFAULT_SETTINGS: PopupLexiconSettings = {
- dictionaryRoot: 'Dictionary', saveExamples: true, saveAllDefinitions: true,
+ dictionaryRoot: 'Dictionary', polishTranslationLanguage: 'de', saveExamples: true, saveAllDefinitions: true,
  savePronunciation: true, saveEtymology: true, saveContext: true,
- openAfterSaving: false, preferredLanguages: '', showAddButton: true,
+ openAfterSaving: false, preferredLanguages: 'en, de, fr, lb, pl', showAddButton: true,
 	wiktionaryEdition: "en",
 	filterLanguages: "",
 	triggerOnSelection: "command",
@@ -64,7 +65,7 @@ export class PopupLexiconSettingTab extends PluginSettingTab {
 		const toggles: [keyof Pick<PopupLexiconSettings, 'saveExamples' | 'saveAllDefinitions' | 'savePronunciation' | 'saveEtymology' | 'saveContext' | 'openAfterSaving' | 'showAddButton'>, string, string][] = [
 			['saveExamples', 'Save example sentences', 'Include every available example.'],
 			['saveAllDefinitions', 'Save all definitions', 'When disabled, save the first sense of each part of speech.'],
-			['savePronunciation', 'Save pronunciation', 'When supplied by the source. The current Wiktionary endpoint does not supply it.'],
+			['savePronunciation', 'Save pronunciation', 'Save phonetics when the native Wiktionary page supplies them.'],
 			['saveEtymology', 'Save etymology', 'When available; also supported in manually edited entries.'],
 			['saveContext', 'Save source-note context', 'Capture nearby text and a link to the note locally.'],
 			['openAfterSaving', 'Open entry after saving', 'Open the saved Markdown note in another tab.'],
@@ -75,25 +76,10 @@ export class PopupLexiconSettingTab extends PluginSettingTab {
 		new Setting(containerEl).setName('Instant lookup').setHeading();
 
 
-		new Setting(containerEl)
-			.setName("Wiktionary edition")
-			.setDesc(
-				"Wiktionary edition to query. In practice only the English edition " +
-					'("en") works: Wiktionary\'s definition API is not implemented for ' +
-					"other editions, which return an error. The English edition still " +
-					'defines words from thousands of languages — use "Show only these ' +
-					'languages" below to focus on specific ones.'
-			)
-			.addText((t) =>
-				t
-					.setPlaceholder("en")
-					.setValue(this.plugin.settings.wiktionaryEdition)
-					.onChange(async (v) => {
-						this.plugin.settings.wiktionaryEdition =
-							v.trim().toLowerCase() || "en";
-						await this.plugin.saveSettings();
-					})
-			);
+		new Setting(containerEl).setName('Definition language').setDesc('English words use English definitions. Other languages use definitions from their native Wiktionary edition. Polish words use translations. No English-gloss fallback is used for native definitions.');
+		new Setting(containerEl).setName('Polish translation language').setDesc('Language code for translations from Polish. Default: de (German).').addText(t => t.setValue(this.plugin.settings.polishTranslationLanguage).onChange(async value => {
+			if (/^[a-z]{2,3}(?:-[a-z]{2,8})?$/.test(value.trim())) { this.plugin.settings.polishTranslationLanguage = value.trim(); await this.plugin.saveSettings(); }
+		}));
 
 		new Setting(containerEl)
 			.setName("Show only these languages")
