@@ -1,7 +1,7 @@
 /* Popup Dictionary — definition popup styling.
    Uses Obsidian CSS variables so it matches the active theme (light/dark). */
 
-.popup-dictionary {
+.popup-lexicon {
 	position: fixed;
 	z-index: var(--layer-popover, 48);
 	box-sizing: border-box;
@@ -21,7 +21,7 @@
 	user-select: text;
 }
 
-.popup-dictionary-header {
+.popup-lexicon-header {
 	display: flex;
 	align-items: baseline;
 	gap: 8px;
@@ -30,14 +30,14 @@
 	border-bottom: 1px solid var(--background-modifier-border);
 }
 
-.popup-dictionary-word {
+.popup-lexicon-word {
 	font-weight: 600;
 	font-size: var(--font-ui-medium, 15px);
 	color: var(--text-normal);
 	word-break: break-word;
 }
 
-.popup-dictionary-edition {
+.popup-lexicon-edition {
 	flex: 0 0 auto;
 	text-transform: uppercase;
 	font-size: 10px;
@@ -48,7 +48,7 @@
 	color: var(--text-muted);
 }
 
-.popup-dictionary-source {
+.popup-lexicon-source {
 	margin-left: auto;
 	flex: 0 0 auto;
 	font-size: var(--font-ui-smaller, 11px);
@@ -57,62 +57,62 @@
 	white-space: nowrap;
 }
 
-.popup-dictionary-source:hover {
+.popup-lexicon-source:hover {
 	text-decoration: underline;
 }
 
-.popup-dictionary-status {
+.popup-lexicon-status {
 	color: var(--text-muted);
 	padding: 2px 0;
 }
 
-.popup-dictionary-status.mod-error {
+.popup-lexicon-status.mod-error {
 	color: var(--text-error);
 }
 
-.popup-dictionary-lang + .popup-dictionary-lang {
+.popup-lexicon-lang + .popup-lexicon-lang {
 	margin-top: 10px;
 	padding-top: 8px;
 	border-top: 1px solid var(--background-modifier-border);
 }
 
-.popup-dictionary-lang-name {
+.popup-lexicon-lang-name {
 	font-weight: 600;
 	color: var(--text-accent);
 	margin-bottom: 2px;
 }
 
-.popup-dictionary-pos {
+.popup-lexicon-pos {
 	font-style: italic;
 	color: var(--text-muted);
 	margin: 5px 0 2px;
 }
 
-.popup-dictionary-defs {
+.popup-lexicon-defs {
 	margin: 0;
 	padding-left: 20px;
 }
 
-.popup-dictionary-defs li {
+.popup-lexicon-defs li {
 	margin: 2px 0;
 }
 
-.popup-dictionary-defs a,
-.popup-dictionary-example a {
+.popup-lexicon-defs a,
+.popup-lexicon-example a {
 	color: var(--text-accent);
 	text-decoration: none;
 }
 
-.popup-dictionary-defs a:hover,
-.popup-dictionary-example a:hover {
+.popup-lexicon-defs a:hover,
+.popup-lexicon-example a:hover {
 	text-decoration: underline;
 }
 
-.popup-dictionary-examples {
+.popup-lexicon-examples {
 	margin-top: 3px;
 }
 
-.popup-dictionary-example {
+.popup-lexicon-example {
 	color: var(--text-muted);
 	font-style: italic;
 	padding-left: 8px;

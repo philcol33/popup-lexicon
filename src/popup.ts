@@ -1,6 +1,6 @@
 import { sanitizeHTMLToDom } from "obsidian";
 import type { DictionaryResult } from "./dictionary";
-import type { PopupDictionarySettings } from "./settings";
+import type { PopupLexiconSettings } from "./settings";
 
 // A single floating popup that renders dictionary results. Positioned with
 // `position: fixed`, so anchor coordinates are viewport coordinates.
@@ -26,7 +26,7 @@ export class DefinitionPopup {
 	private onEnter?: () => void;
 	private onLeave?: () => void;
 
-	constructor(private getSettings: () => PopupDictionarySettings) {}
+	constructor(private getSettings: () => PopupLexiconSettings) {}
 
 	get word(): string | null {
 		return this.currentWord;
@@ -54,7 +54,7 @@ export class DefinitionPopup {
 		this.currentWord = word;
 		const el = this.reset();
 		this.renderHeaderWord(el, word);
-		el.createDiv({ cls: "popup-dictionary-status", text: "Looking up…" });
+		el.createDiv({ cls: "popup-lexicon-status", text: "Looking up…" });
 		this.position(anchor);
 	}
 
@@ -63,7 +63,7 @@ export class DefinitionPopup {
 		const el = this.reset();
 		this.renderHeaderWord(el, word);
 		el.createDiv({
-			cls: "popup-dictionary-status",
+			cls: "popup-lexicon-status",
 			text: "No definition found.",
 		});
 		this.position(anchor);
@@ -74,7 +74,7 @@ export class DefinitionPopup {
 		const el = this.reset();
 		this.renderHeaderWord(el, word);
 		el.createDiv({
-			cls: "popup-dictionary-status mod-error",
+			cls: "popup-lexicon-status mod-error",
 			text: message,
 		});
 		this.position(anchor);
@@ -85,21 +85,21 @@ export class DefinitionPopup {
 		const settings = this.getSettings();
 		const el = this.reset();
 
-		const header = el.createDiv({ cls: "popup-dictionary-header" });
-		header.createSpan({ cls: "popup-dictionary-word", text: result.word });
+		const header = el.createDiv({ cls: "popup-lexicon-header" });
+		header.createSpan({ cls: "popup-lexicon-word", text: result.word });
 		header.createSpan({
-			cls: "popup-dictionary-edition",
+			cls: "popup-lexicon-edition",
 			text: result.edition,
 		});
 		const link = header.createEl("a", {
-			cls: "popup-dictionary-source",
+			cls: "popup-lexicon-source",
 			text: "Wiktionary ↗",
 			href: result.url,
 		});
 		link.setAttr("target", "_blank");
 		link.setAttr("rel", "noopener");
 
-		const body = el.createDiv({ cls: "popup-dictionary-body" });
+		const body = el.createDiv({ cls: "popup-lexicon-body" });
 
 		const filter = parseFilter(settings.filterLanguages);
 		const filtered = filter
@@ -108,20 +108,20 @@ export class DefinitionPopup {
 		const sections = filtered.length > 0 ? filtered : result.langs;
 
 		for (const lang of sections) {
-			const sec = body.createDiv({ cls: "popup-dictionary-lang" });
+			const sec = body.createDiv({ cls: "popup-lexicon-lang" });
 			sec.createDiv({
-				cls: "popup-dictionary-lang-name",
+				cls: "popup-lexicon-lang-name",
 				text: lang.name,
 			});
 
 			for (const entry of lang.entries) {
 				if (entry.partOfSpeech) {
 					sec.createDiv({
-						cls: "popup-dictionary-pos",
+						cls: "popup-lexicon-pos",
 						text: entry.partOfSpeech,
 					});
 				}
-				const ol = sec.createEl("ol", { cls: "popup-dictionary-defs" });
+				const ol = sec.createEl("ol", { cls: "popup-lexicon-defs" });
 				const defs = entry.definitions.slice(
 					0,
 					Math.max(1, settings.maxDefinitionsPerEntry)
@@ -131,11 +131,11 @@ export class DefinitionPopup {
 					li.appendChild(sanitizeHTMLToDom(def.html));
 					if (settings.showExamples && def.examples.length > 0) {
 						const exWrap = li.createDiv({
-							cls: "popup-dictionary-examples",
+							cls: "popup-lexicon-examples",
 						});
 						for (const ex of def.examples.slice(0, MAX_EXAMPLES)) {
 							exWrap
-								.createDiv({ cls: "popup-dictionary-example" })
+								.createDiv({ cls: "popup-lexicon-example" })
 								.appendChild(sanitizeHTMLToDom(ex));
 						}
 					}
@@ -157,13 +157,13 @@ export class DefinitionPopup {
 	}
 
 	private renderHeaderWord(el: HTMLElement, word: string): void {
-		const header = el.createDiv({ cls: "popup-dictionary-header" });
-		header.createSpan({ cls: "popup-dictionary-word", text: word });
+		const header = el.createDiv({ cls: "popup-lexicon-header" });
+		header.createSpan({ cls: "popup-lexicon-word", text: word });
 	}
 
 	private ensureEl(): HTMLElement {
 		if (this.el) return this.el;
-		const el = activeDocument.body.createDiv({ cls: "popup-dictionary" });
+		const el = activeDocument.body.createDiv({ cls: "popup-lexicon" });
 		el.addEventListener("mousedown", () => {
 			this.pinned = true;
 		});

@@ -1,27 +1,27 @@
 {
-	"name": "obsidian-popup-dictionary",
-	"version": "0.3.1",
-	"description": "Show word definitions in a popup on selection or Ctrl-hover, powered by Wiktionary.",
-	"main": "main.js",
-	"scripts": {
-		"dev": "node esbuild.config.mjs",
-		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-		"version": "node version-bump.mjs && git add manifest.json versions.json"
-	},
-	"keywords": [
-		"obsidian",
-		"obsidian-plugin",
-		"dictionary",
-		"wiktionary",
-		"definitions"
-	],
-	"author": "ntsiris",
-	"license": "MIT",
-	"devDependencies": {
-		"@types/node": "^20.11.0",
-		"esbuild": "0.20.0",
-		"obsidian": "latest",
-		"tslib": "2.6.2",
-		"typescript": "5.3.3"
-	}
+  "name": "popup-lexicon",
+  "version": "0.3.1",
+  "description": "A multilingual dictionary and personal vocabulary manager for Obsidian with instant word lookup and local Markdown storage.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "version": "node version-bump.mjs && git add manifest.json versions.json"
+  },
+  "keywords": [
+    "obsidian",
+    "obsidian-plugin",
+    "dictionary",
+    "wiktionary",
+    "definitions"
+  ],
+  "author": "ntsiris",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "esbuild": "0.20.0",
+    "obsidian": "latest",
+    "tslib": "2.6.2",
+    "typescript": "5.3.3"
+  }
 }

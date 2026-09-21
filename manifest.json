@@ -1,10 +1,10 @@
 {
-	"id": "popup-dictionary",
-	"name": "Popup Dictionary",
-	"version": "0.3.1",
-	"minAppVersion": "1.4.0",
-	"description": "Show word definitions in a popup when you select or Ctrl-hover a word, powered by Wiktionary across many languages.",
-	"author": "Nikitas Tsiris",
-	"authorUrl": "https://github.com/ntsiris",
-	"isDesktopOnly": false
+  "id": "popup-lexicon",
+  "name": "Popup Lexicon",
+  "version": "0.3.1",
+  "minAppVersion": "1.4.0",
+  "description": "A multilingual dictionary and personal vocabulary manager for Obsidian with instant word lookup and local Markdown storage.",
+  "author": "Philippe Colling; based on Popup Dictionary by Nikitas Tsiris",
+  "authorUrl": "https://github.com/philcol33/popup-lexicon",
+  "isDesktopOnly": false
 }

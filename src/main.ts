@@ -1,8 +1,8 @@
 import { Notice, Plugin } from "obsidian";
 import {
 	DEFAULT_SETTINGS,
-	PopupDictionarySettingTab,
-	type PopupDictionarySettings,
+	PopupLexiconSettingTab,
+	type PopupLexiconSettings,
 } from "./settings";
 import { DictionaryClient } from "./dictionary";
 import { DefinitionPopup, type Anchor } from "./popup";
@@ -11,8 +11,8 @@ import { getSelectedWord, getWordAtPoint } from "./wordDetection";
 const SELECTION_DEBOUNCE_MS = 250;
 const LEAVE_GRACE_MS = 200;
 
-export default class PopupDictionaryPlugin extends Plugin {
-	settings: PopupDictionarySettings;
+export default class PopupLexiconPlugin extends Plugin {
+	settings: PopupLexiconSettings;
 
 	private dict: DictionaryClient;
 	private popup: DefinitionPopup;
@@ -33,7 +33,7 @@ export default class PopupDictionaryPlugin extends Plugin {
 			() => this.scheduleLeave()
 		);
 
-		this.addSettingTab(new PopupDictionarySettingTab(this.app, this));
+		this.addSettingTab(new PopupLexiconSettingTab(this.app, this));
 
 		this.addCommand({
 			id: "lookup-selection",
@@ -95,7 +95,7 @@ export default class PopupDictionaryPlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		const stored = (await this.loadData()) as Partial<PopupDictionarySettings>;
+		const stored = (await this.loadData()) as Partial<PopupLexiconSettings>;
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, stored);
 	}
 

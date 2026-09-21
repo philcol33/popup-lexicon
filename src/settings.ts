@@ -1,10 +1,10 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
-import type PopupDictionaryPlugin from "./main";
+import type PopupLexiconPlugin from "./main";
 
 export type SelectionTrigger = "command" | "auto";
 export type HoverModifier = "ctrl" | "alt" | "shift" | "none";
 
-export interface PopupDictionarySettings {
+export interface PopupLexiconSettings {
 	/** Wiktionary edition to query; also the language the glosses are written in. */
 	wiktionaryEdition: string;
 	/** Comma-separated language codes to show; empty = show all. */
@@ -18,7 +18,7 @@ export interface PopupDictionarySettings {
 	maxDefinitionsPerEntry: number;
 }
 
-export const DEFAULT_SETTINGS: PopupDictionarySettings = {
+export const DEFAULT_SETTINGS: PopupLexiconSettings = {
 	wiktionaryEdition: "en",
 	filterLanguages: "",
 	triggerOnSelection: "command",
@@ -29,10 +29,10 @@ export const DEFAULT_SETTINGS: PopupDictionarySettings = {
 	maxDefinitionsPerEntry: 5,
 };
 
-export class PopupDictionarySettingTab extends PluginSettingTab {
-	private plugin: PopupDictionaryPlugin;
+export class PopupLexiconSettingTab extends PluginSettingTab {
+	private plugin: PopupLexiconPlugin;
 
-	constructor(app: App, plugin: PopupDictionaryPlugin) {
+	constructor(app: App, plugin: PopupLexiconPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
