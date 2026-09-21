@@ -14,6 +14,7 @@ const entry: DictionaryEntry = {
  encounters: [{ sourcePath: 'Reading/Notes [test].md', context: 'Cette démarche est utile.', date: '2026-09-21' }]
 };
 class MemoryVault {
+ on() { return () => {}; }
  files = new Map<string, TFile | TFolder>(); contents = new Map<string, string>();
  getAbstractFileByPath(path: string) { return this.files.get(path) || null; }
  getMarkdownFiles() { return [...this.files.values()].filter(f => f instanceof TFile); }
@@ -103,4 +104,42 @@ test('history goes back/forward, replaces repeated entries and truncates a branc
 test('instant local search folds accents while preserving multilingual text', () => {
  assert.equal(searchKey('DÉMARCHE'), 'demarche'); assert.equal(searchKey('de\u0301marche'), 'demarche');
  assert.equal(searchKey('日本語'), '日本語');
+});
+
+import { VocabularyIndex } from '../src/vocabulary/vocabularyIndex';
+import { DictionaryClient } from '../src/dictionary';
+import { setRequestHandler } from './obsidian-mock';
+test('index rebuilds from files, filters arbitrary languages/aliases, and follows root changes', async () => {
+ const { vault, store } = setup();
+ await store.save(entry);
+ await store.save({ ...entry, word: 'nachvollziehbar', languageCode: 'de', languageName: 'German' });
+ const index = new VocabularyIndex(store);
+ await index.refresh();
+ assert.equal(index.search('dem')[0].entry.word, 'démarche');
+ assert.equal(index.search('approche', 'fr').length, 1);
+ assert.deepEqual(index.languages('de, fr').map(l => l.code), ['de', 'fr']);
+ const original = [...vault.files.keys()].find(path => path.endsWith('démarche.md'))!;
+ vault.files.delete(original);
+ await index.refresh(); assert.equal(index.search('', 'fr').length, 0);
+ assert.equal(index.all().length, 1);
+ let root = 'Dictionary';
+ const dynamic = new VocabularyIndex(new VocabularyStore(vault as never, () => root));
+ await dynamic.refresh(); assert.equal(dynamic.all().length, 1);
+ root = 'Other'; await dynamic.refresh(); assert.equal(dynamic.all().length, 0);
+});
+test('upstream lookup coalesces requests, retains multilingual senses and retries lowercase', async () => {
+ let requests = 0;
+ setRequestHandler(async ({ url }) => { requests++; return url.endsWith('/Equivocal') ? { status: 404 } : { status: 200, json: {
+  en: [{ language: 'English', partOfSpeech: 'adjective', definitions: [{ definition: 'Having more than one reading.', parsedExamples: [{ example: 'An equivocal answer.' }] }] }],
+  fr: [{ language: 'French', partOfSpeech: 'noun', definitions: [{ definition: 'A synthetic test definition.', examples: ['Un exemple.'] }] }]
+ } }; });
+ const client = new DictionaryClient(() => 'en');
+ const [a, b] = await Promise.all([client.lookup('Equivocal'), client.lookup('Equivocal')]);
+ assert.strictEqual(a, b); assert.equal(requests, 2); assert.equal(a!.langs.length, 2);
+ assert.equal(a!.langs[0].entries[0].definitions[0].examples[0], 'An equivocal answer.');
+ await client.lookup('Equivocal'); assert.equal(requests, 2);
+ setRequestHandler(async () => ({ status: 501 }));
+ await assert.rejects(new DictionaryClient(() => 'fr').lookup('test'), /only supports the English edition/);
+ setRequestHandler(async () => { throw Error('Offline'); });
+ await assert.rejects(new DictionaryClient(() => 'en').lookup('test'), /offline/);
 });

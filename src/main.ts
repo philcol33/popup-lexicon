@@ -6,7 +6,7 @@ import { captureEncounter } from "./vocabulary/context";
 import type { Encounter } from "./vocabulary/types";
 import { VocabularyStore } from "./vocabulary/vocabularyStore";
 import { fromWiktionary } from "./vocabulary/adapter";
-import { Notice, Plugin } from "obsidian";
+import { MarkdownView, Notice, Plugin } from "obsidian";
 import {
 	DEFAULT_SETTINGS,
 	PopupLexiconSettingTab,
@@ -142,6 +142,16 @@ export default class PopupLexiconPlugin extends Plugin {
 	}
 
 	private lookupSelection(notifyIfEmpty: boolean): void {
+		// The command palette can clear DOM selection; CodeMirror retains editor selection.
+		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+		const selected = view?.getMode() === 'source' ? view.editor.getSelection().trim() : '';
+		if (notifyIfEmpty && view?.file && selected && selected.length <= 80) {
+			const bounds = view.containerEl.getBoundingClientRect();
+			const context = view.editor.getLine(view.editor.getCursor('from').line).slice(0, 500);
+			void this.run(selected, { x: bounds.left + 32, y: bounds.top + 70 }, null,
+				{ sourcePath: view.file.path, context, date: new Date().toISOString() });
+			return;
+		}
 		const hit = getSelectedWord(window);
 		if (!hit) {
 			if (notifyIfEmpty) {
@@ -227,8 +237,8 @@ export default class PopupLexiconPlugin extends Plugin {
 
 	// ---- Shared lookup + render --------------------------------------------
 
-	private async run(word: string, anchor: Anchor, node: Node | null = null): Promise<void> {
-		this.currentEncounter = this.settings.saveContext ? captureEncounter(this.app, node, word) : undefined;
+	private async run(word: string, anchor: Anchor, node: Node | null = null, encounter?: Encounter): Promise<void> {
+		this.currentEncounter = this.settings.saveContext ? encounter || captureEncounter(this.app, node, word) : undefined;
 		this.popup.showLoading(anchor, word);
 		try {
 			const result = await this.dict.lookup(word);

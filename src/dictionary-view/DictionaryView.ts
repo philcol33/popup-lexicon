@@ -4,12 +4,12 @@ import { Component, ItemView, type WorkspaceLeaf } from 'obsidian';
 import type PopupLexiconPlugin from '../main';
 import { fromWiktionary } from '../vocabulary/adapter';
 import { renderEntryActions } from '../vocabulary/actions';
-import { entryKey, normalizeWord, type SavedEntry } from '../vocabulary/types';
+import { entryKey, normalizeWord, type SavedEntry, type DictionaryEntry } from '../vocabulary/types';
 import { renderDefinition } from './DefinitionView';
 import { WordList } from './WordList';
 
 export const DICTIONARY_VIEW = 'popup-lexicon-dictionary';
-type DisplayEntry = Omit<SavedEntry, 'path'> & { path?: string };
+type DisplayEntry = Omit<SavedEntry, 'path'> & { path?: string; alternatives?: DictionaryEntry[] };
 
 export class DictionaryView extends ItemView {
 	private history = new NavigationHistory<DisplayEntry>(value => entryKey(value.entry));
@@ -73,7 +73,7 @@ export class DictionaryView extends ItemView {
 		this.refreshList();
 		if (this.current) {
 			const saved = this.plugin.index.find(this.current.entry);
-			if (saved) await this.show(saved, false);
+			if (saved) await this.show({ ...saved, alternatives: this.current.alternatives }, false);
 			else if (this.current.path) { this.current = undefined; this.emptyState('This entry was deleted or moved outside the dictionary folder.'); }
 		}
 	}
@@ -129,15 +129,24 @@ export class DictionaryView extends ItemView {
 		this.pane.empty();
 		const article = this.pane.createEl('article');
 		this.refreshList();
-		await renderDefinition(this.app, article, value.entry, this.rendered, value.path || '');
+		try { await renderDefinition(this.app, article, value.entry, this.rendered, value.path || ''); }
+		catch (e) { if (generation === this.generation) this.emptyState(e instanceof Error ? e.message : 'Could not display entry.'); return; }
 		if (generation !== this.generation) return;
 		renderEntryActions(article.createDiv({ cls: 'lexicon-actions' }), this.plugin, value.entry);
+		if (value.alternatives && value.alternatives.length > 1) {
+			const choices = this.pane.createDiv({ cls: 'lexicon-result-languages' }); this.pane.prepend(choices);
+			for (const entry of value.alternatives) {
+				const button = choices.createEl('button', { text: entry.languageName, attr: { 'aria-pressed': String(entry.languageCode === value.entry.languageCode) } });
+				button.onclick = () => { void this.show({ ...(this.plugin.index.find(entry) || { entry }), alternatives: value.alternatives }); };
+			}
+		}
 	}
 	async lookup(word: string): Promise<void> {
 		word = word.trim(); if (!word) return;
 		const local = this.plugin.index.search(word, this.language).find(saved => normalizeWord(saved.entry.word) === normalizeWord(word) || saved.entry.aliases?.some(alias => normalizeWord(alias) === normalizeWord(word)));
 		if (local) { await this.show(local); return; }
 		const generation = ++this.generation;
+		this.current = undefined;
 		this.pane.empty(); this.pane.createDiv({ cls: 'lexicon-status', text: `Looking up “${word}”…` });
 		try {
 			const result = await this.plugin.dict.lookup(word);
@@ -148,12 +157,7 @@ export class DictionaryView extends ItemView {
 			const filtered = result.langs.filter(lang => allow.includes(lang.code.toLowerCase()));
 			const languages = filtered.length ? filtered : result.langs;
 			const first = languages.find(lang => lang.code === this.language) || languages.find(lang => preferred.includes(lang.code)) || languages[0];
-			await this.show({ entry: fromWiktionary(result, first) });
-			const choices = this.pane.createDiv({ cls: 'lexicon-result-languages' });
-			this.pane.prepend(choices);
-			for (const lang of languages) choices.createEl('button', { text: lang.name }).onclick = () => {
-				void this.show({ entry: fromWiktionary(result, lang) }).then(() => this.pane.prepend(choices));
-			};
+			await this.show({ entry: fromWiktionary(result, first), alternatives: languages.map(lang => fromWiktionary(result, lang)) });
 		} catch (e) { if (generation === this.generation) this.emptyState(e instanceof Error ? e.message : 'Lookup failed.'); }
 	}
 }

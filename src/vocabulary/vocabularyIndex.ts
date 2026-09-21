@@ -20,7 +20,7 @@ export class VocabularyIndex extends Component {
 	onload(): void {
 		this.disposed = false;
 		for (const event of ['create', 'modify', 'delete', 'rename'] as const) {
-			this.registerEvent(this.store.vault.on(event as 'create', () => this.schedule()));
+			this.registerEvent(this.store.vault.on(event as 'create', file => { this.cache.delete(file.path); this.schedule(); }));
 		}
 		this.ready = this.refresh();
 	}
@@ -49,7 +49,7 @@ export class VocabularyIndex extends Component {
 				for (const saved of this.ordered) this.identities.set(entryKey(saved.entry), saved);
 				this.error = undefined;
 			} catch (error) { this.error = error instanceof Error ? error.message : 'Could not index dictionary.'; }
-			if (!this.disposed) for (const listener of this.listeners) listener();
+			if (!this.disposed) for (const listener of this.listeners) { try { listener(); } catch (error) { console.error("Popup Lexicon index listener", error); } }
 		});
 		return this.tail;
 	}
