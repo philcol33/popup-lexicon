@@ -1,4 +1,5 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { dictionaryRoot } from "./vocabulary/paths";
+import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type PopupLexiconPlugin from "./main";
 
 export type SelectionTrigger = "command" | "auto";
@@ -52,6 +53,27 @@ export class PopupLexiconSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
+		new Setting(containerEl).setName('Personal dictionary').setHeading();
+		new Setting(containerEl).setName('Dictionary root folder').setDesc('Vault-relative folder. Changing this selects another collection; existing files are never moved.').addText(t => {
+			t.setValue(this.plugin.settings.dictionaryRoot).setPlaceholder('Dictionary');
+			t.inputEl.addEventListener('change', () => {
+				try { this.plugin.settings.dictionaryRoot = dictionaryRoot(t.getValue()); void this.plugin.saveSettings(); }
+				catch (e) { new Notice(String(e)); t.setValue(this.plugin.settings.dictionaryRoot); }
+			});
+		});
+		const toggles: [keyof Pick<PopupLexiconSettings, 'saveExamples' | 'saveAllDefinitions' | 'savePronunciation' | 'saveEtymology' | 'saveContext' | 'openAfterSaving' | 'showAddButton'>, string, string][] = [
+			['saveExamples', 'Save example sentences', 'Include every available example.'],
+			['saveAllDefinitions', 'Save all definitions', 'When disabled, save the first sense of each part of speech.'],
+			['savePronunciation', 'Save pronunciation', 'When supplied by the source. The current Wiktionary endpoint does not supply it.'],
+			['saveEtymology', 'Save etymology', 'When available; also supported in manually edited entries.'],
+			['saveContext', 'Save source-note context', 'Capture nearby text and a link to the note locally.'],
+			['openAfterSaving', 'Open entry after saving', 'Open the saved Markdown note in another tab.'],
+			['showAddButton', 'Show Add button in popup', 'Manual search and dictionary view always offer saving.'],
+		];
+		for (const [key, name, description] of toggles) new Setting(containerEl).setName(name).setDesc(description).addToggle(t => t.setValue(this.plugin.settings[key]).onChange(async value => { this.plugin.settings[key] = value; await this.plugin.saveSettings(); }));
+		new Setting(containerEl).setName('Preferred language ordering').setDesc('Comma-separated language codes, for example fr, de, en. Other languages remain available.').addText(t => t.setValue(this.plugin.settings.preferredLanguages).onChange(async value => { this.plugin.settings.preferredLanguages = value; await this.plugin.saveSettings(); }));
+		new Setting(containerEl).setName('Instant lookup').setHeading();
+
 
 		new Setting(containerEl)
 			.setName("Wiktionary edition")

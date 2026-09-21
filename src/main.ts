@@ -1,3 +1,4 @@
+import { DictionarySearchModal } from "./dictionary-view/SearchModal";
 import { renderEntryActions } from "./vocabulary/actions";
 import { captureEncounter } from "./vocabulary/context";
 import type { Encounter } from "./vocabulary/types";
@@ -51,6 +52,8 @@ export default class PopupLexiconPlugin extends Plugin {
 			name: "Look up selected word",
 			callback: () => this.lookupSelection(true),
 		});
+
+		this.addCommand({ id: 'search-dictionary', name: 'Search Dictionary', callback: () => new DictionarySearchModal(this).open() });
 
 		// Automatic lookup when a word is selected (if enabled).
 		this.registerDomEvent(activeDocument, "selectionchange", () => {

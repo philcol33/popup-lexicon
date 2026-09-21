@@ -7,7 +7,7 @@ Build a fast lookup popup and a separate Apple Dictionary-inspired Obsidian Item
 - [x] 2: Markdown store, safe Unicode paths, duplicate detection
 - [x] 3: Rich portable entries and round-trip parser
 - [x] 4: Source-note encounters; append without replacing user content
-- [ ] 5: Manual search reusing DictionaryClient
+- [x] 5: Manual search reusing DictionaryClient
 - [ ] 6: Rebuildable local index, live edits/deletes/renames
 - [ ] 7: ItemView, dynamic languages, local search, shared definition renderer
 - [ ] 8: Back/forward, local-first exploration
