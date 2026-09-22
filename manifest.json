@@ -1,7 +1,7 @@
 {
   "id": "popup-lexicon",
   "name": "Popup Lexicon",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "minAppVersion": "1.7.2",
   "description": "A multilingual dictionary and personal vocabulary manager for Obsidian with instant word lookup and local Markdown storage.",
   "author": "Philippe Colling; based on Popup Dictionary by Nikitas Tsiris",

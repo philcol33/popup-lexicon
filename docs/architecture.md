@@ -50,3 +50,13 @@ Native page formats vary. Lack of native definitions, unsupported page structure
 `lookup/polishGrammar.ts` extracts field-marked source sections and builds six-person cards from the attested present/simple-future rows. Group classification uses ja/ty, never infinitive suffixes. Ambiguous forms are not guessed. The shared result/entry models carry grammar, conjugation, inflection, example sentences and usage notes (HTML at the source boundary; Markdown after adaptation). `vocabulary/htmlTables.ts` expands merged cells and separates nested tables for portable Markdown. The Markdown body is authoritative for every added field.
 
 Explicit enrichment uses Vault.process to append only missing learning sections. It validates word/language identity and leaves even deliberately empty existing sections unchanged. Normal duplicate saves still never overwrite.
+
+## Form resolution (0.6.0)
+
+`lookup/wordForms.ts` reads only grammatical form-of relationships from the discovery API. A language section resolves automatically only when every sense points to the same lemma. Mixed or competing senses expose explicit choices, excluding synonym/spelling links. `LangSection.headword` carries the resolved identity, while `lookupForm` is a transient display label. `fromWiktionary` uses the canonical identity for saving and source links. Selected choices flow through popup, modal and dictionary actions.
+
+The resolver follows at most four links, detects cycles, and retains per-language identity. German determiner + noun fallback requires a German noun entry and runs only after whole-phrase lookup fails. `vocabulary/forms.ts` extracts form keys from saved Markdown tables/aliases; `VocabularyIndex` caches them per file signature. Exact dictionary headwords take precedence over form matches; competing local matches are not arbitrarily merged. Normal store duplicate checks operate on the resolved word/language.
+
+`vocabulary/aspect.ts` models explicit Polish aspect relations and reads their portable Markdown section (including older source grammar). `saveRelated.ts` coordinates the main save and directly documented partners without recursive expansion. `VocabularyStore.linkAspects` inserts a missing section or updates matching Wiktionary links; it preserves unrelated note content. Failed partner fetches leave the main save intact and return a retry notice. Dictionary/popup relation links navigate through local entries.
+
+Native etymology is displayed before non-Polish meanings, with an English native-page supplement to the existing REST definitions. `withAvailableDetails` merges only missing optional source details into existing note content for display; explicit enrichment persists missing sections without replacing definitions.

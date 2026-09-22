@@ -70,3 +70,25 @@ export function portablePolishHtml(root: HTMLElement): string | undefined {
  });
  return plain(clone) ? clone.innerHTML : undefined;
 }
+
+/** Read explicitly linked aspect partners; never infer them by stripping a prefix. */
+export function polishAspects(grammar: HTMLElement, word: string): import('../vocabulary/aspect').AspectRelation[] {
+ const result: import('../vocabulary/aspect').AspectRelation[] = [];
+ for (const p of [...grammar.querySelectorAll('p')]) {
+  const label = p.querySelector('i')?.textContent || '';
+  if (!label.includes('czasownik') || label.includes('zwrotny') !== / się$/.test(word)) continue;
+  const kind = /\bniedokonany\b/.test(label) ? 'imperfective' : /\bdokonany\b/.test(label) ? 'perfective' : undefined;
+  if (!kind) continue;
+  const marker = [...p.querySelectorAll('a,span')].find(el => el.textContent?.trim() === (kind === 'perfective' ? 'ndk.' : 'dk.'));
+  if (!marker) continue;
+  for (const a of [...p.querySelectorAll('a[href]')]) {
+   if (!(marker.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+   const path = a.getAttribute('href')?.match(/^\/wiki\/([^#?]+)/)?.[1];
+   if (!path) continue;
+   let partner: string; try { partner = decodeURIComponent(path).replace(/_/g, ' '); } catch { continue; }
+   if (partner.includes(':') || partner === word || result.some(value => value.word === partner)) continue;
+   result.push({ kind, word: partner, sourceUrl: `https://pl.wiktionary.org/wiki/${encodeURIComponent(partner)}` });
+  }
+ }
+ return result;
+}

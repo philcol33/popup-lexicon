@@ -1,3 +1,4 @@
+import { matchesEntryForm } from '../src/vocabulary/forms';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
@@ -32,6 +33,7 @@ function makeView(saved = [local]) {
  const plugin: any = {
   app, settings: { ...DEFAULT_SETTINGS },
   index: { ready: Promise.resolve(), all: () => saved, find: (entry: any) => saved.find(s => s.entry.word === entry.word),
+   resolve: (query: string, language: string) => saved.filter(s => (!language || s.entry.languageCode === language) && matchesEntryForm(s.entry, query)),
    search: (query: string, language: string) => saved.filter(s => (!language || s.entry.languageCode === language) && s.entry.word.normalize('NFD').replace(/\p{M}/gu, '').includes(query.normalize('NFD').replace(/\p{M}/gu, ''))),
    languages: () => saved.length ? [{ code: 'fr', name: 'French' }] : [],
    subscribe: (fn: () => void) => { subscriber = fn; return () => { subscriber = () => {}; }; } },
@@ -168,4 +170,103 @@ test('conjugation and merged inflection tables survive Markdown and offline rend
  assert.equal(forSaving(entry,{...DEFAULT_SETTINGS,saveExamples:false}).usageExamples,undefined);
  const root=document.createElement('div'); await renderDefinition({} as never,root,saved,new Component() as never);
  assert.match(root.textContent!, /Conjugation/); assert.match(root.textContent!, /pracuję/); assert.match(root.textContent!,/Rolnik/);
+});
+
+import { inflectionLemma } from '../src/lookup/wordForms';
+import { entryForms } from '../src/vocabulary/forms';
+const formFixture = (word: string) => JSON.parse(readFileSync(`tests/fixtures/forms/${word}.json`, 'utf8'));
+function formRequests() {
+ const calls: string[] = [];
+ setRequestHandler(async ({url}) => {
+  calls.push(url);
+  if(url.includes('/w/api.php')) {const page=new URL(url).searchParams.get('page')!;return {status:200,json:formFixture('native-'+page)};}
+  const word=decodeURIComponent(url.split('/').pop()!);
+  if(word.toLowerCase()==='des hauses')return {status:404,json:{}};
+  return {status:200,json:formFixture(word)};
+ });
+ return calls;
+}
+test('inflected Polish/German queries resolve per-language canonical identities and native content',async()=>{
+ formRequests();
+ const client=new DictionaryClient(()=> 'en',()=>({filterLanguages:'pl,de',polishTranslationLanguage:'de'}));
+ const pl=await client.lookup('lubisz');const language=pl!.langs.find(l=>l.code==='pl')!;
+ assert.equal(language.headword,'lubić');assert.equal(language.lookupForm,'lubisz');assert.match(language.conjugation!,/lubisz/);
+ const entry=fromWiktionary(pl!,language);assert.equal(entry.word,'lubić');assert.deepEqual(entry.aliases,['lubisz']);
+ assert.match(entry.source!.url!,/lubi%C4%87/);assert.match(entry.partsOfSpeech[0].meanings[0].definition,/mögen/);
+ const phrase=await client.lookup('des Hauses');assert.equal(phrase!.langs.length,1);
+ const german=phrase!.langs[0];assert.equal(german.code,'de');assert.equal(german.headword,'Haus');assert.equal(german.lookupForm,'des Hauses');
+ const haus=fromWiktionary(phrase!,german);assert.ok(matchesEntryForm(haus,'Hauses'));assert.ok(matchesEntryForm(haus,'des Hauses'));assert.ok(matchesEntryForm(haus,'Häusern'));
+ assert.equal((await client.lookup('Hauses'))!.langs.find(l=>l.code==='de')!.lookupForm,'Hauses');
+ const parsed=parseMarkdown(writeMarkdown(entry))!;assert.equal(parsed.word,'lubić');assert.ok(entryForms(parsed).includes('lubisz'));
+});
+test('synonyms, mixed senses and competing lemmas are not silently merged',()=>{
+ const section=(definitions:string[])=>({code:'pl',name:'Polish',entries:[{partOfSpeech:'Verb',definitions:definitions.map(html=>({html,examples:[]}))}]});
+ const form=(prefix:string,word:string)=>`<span class="form-of-definition">${prefix} of <span class="form-of-definition-link"><i lang="pl"><a href="/wiki/${word}#Polish">${word}</a></i></span></span>`;
+ assert.equal(inflectionLemma(section([form('synonym','kochać')])),undefined);
+ assert.equal(inflectionLemma(section([form('second-person singular present','lubić'),'An independent meaning.'])),undefined);
+ assert.equal(inflectionLemma(section([form('plural','dom'),form('plural','duma')])),undefined);
+ assert.equal(inflectionLemma(section([form('second-person singular present','lubić')])),'lubić');
+});
+test('saved conjugations open the base word offline and translation heading appears only once',async()=>{
+ const entry={word:'lubić',languageCode:'pl',languageName:'Polish',contentKind:'translation' as const,definitionLanguage:'de',partsOfSpeech:[{type:'Translations → German',meanings:[{definition:'mögen'}]}],conjugation:'| Osoba | Forma |\n| --- | --- |\n| ja | lubię |\n| ty | lubisz |'};
+ const {view,network}=makeView([{path:'Dictionary/Polish/lubić.md',entry}] as any);await view.onOpen();await view.lookup('lubisz');
+ assert.equal(network(),0);assert.match(view.contentEl.textContent!,/lubisz → lubić/);
+ assert.equal((view.contentEl.textContent!.match(/Translations → German/g)||[]).length,1);await view.onClose();
+});
+test('lemma resolution cycles fail safely without creating a saveable inflected entry',async()=>{
+ setRequestHandler(async()=>({status:200,json:{pl:[{language:'Polish',partOfSpeech:'Verb',definitions:[{definition:'<span class="form-of-definition">plural of <span class="form-of-definition-link"><i lang="pl"><a href="/wiki/loop">loop</a></i></span></span>'}]}]}}));
+ const client=new DictionaryClient(()=> 'en',()=>({filterLanguages:'pl',polishTranslationLanguage:'de'}));
+ const value=await client.lookup('loop');assert.ok(value!.langs[0].unavailable);assert.equal(value!.langs[0].entries.length,0);
+});
+
+test('English/French inflections preserve native definitions and expose ambiguous base-word choices',async()=>{
+ formRequests();
+ const client=new DictionaryClient(()=> 'en',()=>({filterLanguages:'en,fr',polishTranslationLanguage:'de'}));
+ for(const [query,code,lemma] of [['houses','en','house'],['chevaux','fr','cheval'],['mangeaient','fr','manger']]) {
+  const result=await client.lookup(query);const language=result!.langs.find(l=>l.code===code)!;
+  assert.equal(language.headword,lemma);assert.equal(language.definitionLanguage,code);
+  const value=fromWiktionary(result!,language);assert.equal(value.word,lemma);assert.deepEqual(value.aliases,[query]);assert.ok(value.partsOfSpeech.length);
+  if(code==='fr'){assert.match(value.source!.url!,/^https:\/\/fr.wiktionary/);assert.doesNotMatch(value.partsOfSpeech[0].meanings[0].definition,/^horse$|^to eat$/);}
+ }
+ const went=await client.lookup('went');const ambiguous=went!.langs.find(l=>l.code==='en')!;
+ assert.equal(ambiguous.lemma,undefined);assert.deepEqual(ambiguous.lemmaChoices,['go','wend']);
+ const selected=await client.lookupLanguage('went',{...ambiguous,lemma:'go'});
+ assert.equal(selected.headword,'go');assert.equal(selected.lookupForm,'went');assert.equal(fromWiktionary(went!,selected).word,'go');
+});
+
+import { aspectsFromGrammar } from '../src/vocabulary/aspect';
+test('Polish aspect partners are explicit, distinct headwords and shown above meanings',async()=>{
+ const language=parsePolishTranslations(polishFixture('zrobić'),'de')!;
+ assert.deepEqual(language.aspects?.map(value=>[value.kind,value.word]),[['perfective','robić']]);
+ const value=fromWiktionary({word:'zrobić',edition:'pl',url:language.sourceUrl!,langs:[language]},language);
+ const root=document.createElement('div');await renderDefinition({} as never,root,value,new Component() as never);
+ assert.match(root.textContent!,/aspekt dokonany od: robić/);
+ assert.ok(root.textContent!.indexOf('aspekt dokonany')<root.textContent!.indexOf('Grammar'));
+ const parsed=parseMarkdown(writeMarkdown(value))!;assert.deepEqual(parsed.aspects,value.aspects);
+ assert.equal(aspectsFromGrammar('_czasownik przechodni dokonany_ ([ndk.](https://pl.wiktionary.org/wiki/Aneks:X) [robić](https://pl.wiktionary.org/wiki/robi%C4%87))','zrobić')[0]?.word,'robić');
+});
+test('etymology precedes meanings for English/French/German while Polish keeps its existing order',async()=>{
+ for(const languageCode of ['en','fr','de','pl']) {
+  const value={...local.entry,languageCode,etymology:'ETYMOLOGY MARKER',partsOfSpeech:[{type:'Noun',meanings:[{definition:'MEANING MARKER'}]}]};
+  const root=document.createElement('div');await renderDefinition({} as never,root,value,new Component() as never);
+  const text=root.textContent!;assert.equal(text.indexOf('ETYMOLOGY MARKER')<text.indexOf('MEANING MARKER'),languageCode!=='pl');
+  const md=writeMarkdown(value);assert.equal(md.indexOf('## Etymology')<md.indexOf('## Noun'),languageCode!=='pl');
+ }
+});
+
+
+test('Ästhetik source etymology is extracted and retained before its German meaning',async()=>{
+ const language=parseNativePage(formFixture('native-Ästhetik').parse,{code:'de',name:'German',entries:[]})!;
+ assert.ok(language);assert.match(language.etymology!,/griech|Griech/);
+ const entry=fromWiktionary({word:'Ästhetik',edition:'de',url:language.sourceUrl!,langs:[language]},language);
+ const root=document.createElement('div');await renderDefinition({} as never,root,entry,new Component() as never);
+ assert.ok(root.querySelector('.lexicon-section-label')!.compareDocumentPosition(root.querySelector('.lexicon-pos')!) & Node.DOCUMENT_POSITION_FOLLOWING);
+ assert.match(parseMarkdown(writeMarkdown(entry))!.etymology!,/griech|Griech/);
+});
+
+test('English lookups supplement REST meanings with native etymology',async()=>{
+ setRequestHandler(async({url})=>({status:200,json:url.includes('/w/api.php')?{parse:{title:'example',text:'<h2>English</h2><h3>Etymology</h3><p>From Latin exemplum.</p><h3>Noun</h3><ol><li>A representative instance.</li></ol>'}}:{en:[{language:'English',partOfSpeech:'Noun',definitions:[{definition:'A representative instance.'}]}]}}));
+ const client=new DictionaryClient(()=> 'en',()=>({filterLanguages:'en',polishTranslationLanguage:'de'}));
+ const result=await client.lookup('example');assert.match(result!.langs[0].etymology!,/exemplum/);
+ assert.equal(result!.langs[0].entries[0].definitions[0].html,'A representative instance.');
 });

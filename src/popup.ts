@@ -1,3 +1,4 @@
+import { aspectLabel } from './vocabulary/aspect';
 import { sanitizeHTMLToDom } from "obsidian";
 import type { DictionaryResult, LangSection } from "./dictionary";
 import type { PopupLexiconSettings } from "./settings";
@@ -30,7 +31,8 @@ export class DefinitionPopup {
 
 	constructor(
 		private getSettings: () => PopupLexiconSettings,
-		private renderActions?: (container: HTMLElement, result: DictionaryResult, language: LangSection) => void
+		private renderActions?: (container: HTMLElement, result: DictionaryResult, language: LangSection) => void,
+		private openEntry?: (word: string, language: string) => void | Promise<void>
 	) {}
 
 	get word(): string | null {
@@ -120,6 +122,14 @@ export class DefinitionPopup {
 				text: lang.name,
 			});
 
+			for (const relation of lang.aspects || []) {
+				const row = sec.createDiv({ cls: 'lexicon-aspect' });
+				row.createEl('em', { text: aspectLabel(relation.kind) + ' ' });
+				const link = row.createEl('a', { text: relation.word, href: relation.sourceUrl });
+				if (this.openEntry) link.onclick = event => { event.preventDefault(); void this.openEntry!(relation.word, lang.code); };
+			}
+			if (lang.etymology && lang.code !== 'pl') { sec.createDiv({ cls: 'popup-lexicon-pos', text: 'Etymology' }); sec.createDiv().append(sanitizeHTMLToDom(lang.etymology)); }
+			if (lang.headword && lang.headword !== result.word) sec.createDiv({ cls: 'lexicon-status', text: `${lang.lookupForm || result.word} → ${lang.headword}` });
 			if (lang.pronunciation) sec.createDiv({ cls: 'lexicon-phonetics', text: lang.pronunciation });
 			if (lang.unavailable) sec.createDiv({ cls: 'popup-lexicon-status', text: lang.unavailable });
 			if (lang.sourceUrl) sec.createEl('a', { cls: 'popup-lexicon-source', text: 'Source ↗', href: lang.sourceUrl, attr: { target: '_blank', rel: 'noopener' } });
@@ -156,11 +166,11 @@ export class DefinitionPopup {
 			for (const [label, value] of [['Conjugation', lang.conjugation], ['Full inflection', lang.inflection], ['Usage notes', lang.usageNotes]]) {
 				if (value) { const details = sec.createEl('details', { cls: 'lexicon-grammar' }); details.createEl('summary', { text: label }); details.createDiv().append(sanitizeHTMLToDom(value)); }
 			}
-			if (lang.etymology) {
+			if (lang.etymology && lang.code === 'pl') {
 				const details = sec.createEl('details'); details.createEl('summary', { text: 'Etymology' });
 				details.createDiv().appendChild(sanitizeHTMLToDom(lang.etymology));
 			}
-			this.absolutizeLinks(sec, lang.edition || result.edition);
+			this.absolutizeLinks(sec, lang.edition || result.edition, lang.headword || result.word);
 			this.renderActions?.(sec.createDiv({ cls: "lexicon-actions" }), result, lang);
 		}
 
@@ -207,14 +217,14 @@ export class DefinitionPopup {
 
 	// Wiktionary definitions use root-relative links ("/wiki/...") and "./word"
 	// links. Rewrite them to absolute URLs that open in the system browser.
-	private absolutizeLinks(root: HTMLElement, edition: string): void {
+	private absolutizeLinks(root: HTMLElement, edition: string, headword: string): void {
 		const base = `https://${edition}.wiktionary.org`;
 		root.findAll("a").forEach((a) => {
 			const href = a.getAttribute("href") || "";
 			if (href.startsWith("//")) {
 				a.setAttribute("href", `https:${href}`);
 			} else if (href.startsWith("#")) {
-				a.setAttribute("href", `${base}/wiki/${encodeURIComponent(this.currentWord || "")}${href}`);
+				a.setAttribute("href", `${base}/wiki/${encodeURIComponent(headword)}${href}`);
 			} else if (href.startsWith("./")) {
 				a.setAttribute("href", `${base}/wiki/${href.slice(2)}`);
 			} else if (href.startsWith("/")) {

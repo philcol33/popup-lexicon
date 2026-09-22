@@ -1,18 +1,27 @@
-import { languageLabel } from "../lookup/nativeWiktionary";
+import { aspectLabel } from '../vocabulary/aspect';
 import { Component, MarkdownRenderer, type App } from 'obsidian';
 import type { DictionaryEntry } from '../vocabulary/types';
 
 /** Shared rendering of both Markdown entries and adapted Wiktionary results. */
-export async function renderDefinition(app: App, root: HTMLElement, entry: DictionaryEntry, owner: Component, sourcePath = '', isCurrent = () => true): Promise<void> {
+export async function renderDefinition(app: App, root: HTMLElement, entry: DictionaryEntry, owner: Component, sourcePath = '', isCurrent = () => true, openEntry?: (word: string, language: string) => void | Promise<void>): Promise<void> {
 	root.addClass('lexicon-definition');
 	root.createDiv({ cls: 'lexicon-language-label', text: entry.languageName });
 	root.createEl('h1', { text: entry.word });
-	if (entry.contentKind === 'translation') root.createDiv({ cls: 'lexicon-content-language', text: `Translations → ${languageLabel(entry.definitionLanguage || 'de', 'en')}` });
+	for (const relation of entry.aspects || []) {
+		const row = root.createDiv({ cls: 'lexicon-aspect' }); row.createEl('em', { text: aspectLabel(relation.kind) + ' ' });
+		const a = row.createEl('a', { text: relation.word, href: relation.path || relation.sourceUrl || '#' });
+		a.onclick = event => { if (openEntry || relation.path) { event.preventDefault(); if (openEntry) void openEntry(relation.word, entry.languageCode); else void app.workspace.openLinkText(relation.path!, '', true); } };
+	}
+	if (entry.lookupForm && entry.lookupForm !== entry.word) root.createDiv({ cls: 'lexicon-status', text: `${entry.lookupForm} → ${entry.word}` });
 	if (entry.contentKind === 'translation' && !entry.partsOfSpeech.length && entry.grammar) root.createDiv({ cls: 'lexicon-status', text: 'No translation listed on this source page. Grammar and examples are available below.' });
 	if (entry.unavailable) root.createDiv({ cls: 'lexicon-status', text: entry.unavailable });
 	const phonetics = [entry.pronunciation, ...(entry.phonetics || [])].filter(Boolean).join(' · ');
 	if (phonetics) root.createDiv({ cls: 'lexicon-phonetics', text: phonetics });
 	const markdown = async (value: string, element: HTMLElement) => MarkdownRenderer.render(app, value, element, sourcePath, owner);
+	if (entry.etymology && entry.languageCode !== 'pl') {
+		root.createEl('h2', { cls: 'lexicon-section-label', text: 'Etymology' });
+		await markdown(entry.etymology, root.createDiv());
+	}
 	for (const part of entry.partsOfSpeech) {
 		if (!isCurrent()) return;
 		root.createEl('h2', { cls: 'lexicon-pos', text: part.type });
@@ -37,7 +46,7 @@ export async function renderDefinition(app: App, root: HTMLElement, entry: Dicti
 	for (const [label, value] of [['Full inflection', entry.inflection], ['Usage notes', entry.usageNotes]]) {
 		if (value) { const details = root.createEl('details', { cls: 'lexicon-grammar' }); details.createEl('summary', { text: label }); await markdown(value, details.createDiv()); }
 	}
-	if (entry.etymology) {
+	if (entry.etymology && entry.languageCode === 'pl') {
 		root.createEl('h2', { cls: 'lexicon-section-label', text: 'Etymology' });
 		await markdown(entry.etymology, root.createDiv());
 	}

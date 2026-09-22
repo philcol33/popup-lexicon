@@ -31,3 +31,15 @@ Check light theme, split panes, slow/offline transitions and keyboard navigation
 Offline fixtures cover pracować, robić, bić, być, zrobić, wiedzieć, uczyć się and dom. Checks cover learner groups based on attested forms, -ić exceptions, irregular/reflexive forms, perfective future labelling, source examples, merged/nested tables, editable Markdown round trips and missing-section enrichment without overwrites. Fixtures have source/licence attribution.
 
 `scripts/live-polish.ts` runs only in `Popup Lexicon Test`. Five live entries passed native-source lookup, six-person table rendering, popup rendering, save/read and actual Obsidian Markdown rendering. These sample entries remain available in the test vault. The temporary QA plugin is disabled and removed after verification.
+
+## Inflected forms (0.6.0)
+
+Regression fixtures cover Polish lubisz/lubić, German Hauses/Haus, English houses/house and went/go, and French chevaux/cheval and mangeaient/manger. Tests verify per-language identities, native definitions, canonical source links, phrase fallback, duplicate prevention, editable offline form keys, ambiguous choices, synonym exclusion, cycle detection and the single translation heading.
+
+`scripts/live-forms.ts` checks all five unambiguous examples in the isolated test vault: native source lookup, canonical save, repeated save without a duplicate or changed note, and dictionary lookup with network calls disabled. It also checks the explicit went → go choice. Generated sample base entries remain in the test vault.
+
+## Aspect partners and etymology (0.6.0)
+
+The automated suite includes 38 checks. New coverage verifies explicit Polish source relations, legacy italic grammar labels, automatic one-time partner creation, reciprocal local links, partial failures, preservation of personal notes, English etymology supplementation, real German Ästhetik source extraction, and etymology-first rendering/storage for non-Polish languages.
+
+`scripts/live-relations.ts` uses recorded Wiktionary pages with real Obsidian Vault/Markdown/UI APIs. It verifies partner creation, repeat saves, manual-text preservation, links in both directions, actual table rendering, Ästhetik etymology order and navigation from zrobić to the local robić entry. Temporary test entries are trashed after the check; useful examples are retained in the test dictionary.

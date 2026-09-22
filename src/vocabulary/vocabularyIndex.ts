@@ -1,3 +1,5 @@
+import { entryForms } from './forms';
+import { germanNounPhrase } from '../lookup/wordForms';
 import { Component } from 'obsidian';
 import { entryKey, normalizeWord, type DictionaryEntry, type SavedEntry } from './types';
 import type { VocabularyStore } from './vocabularyStore';
@@ -6,7 +8,7 @@ export const searchKey = (value: string): string => normalizeWord(value).normali
 
 /** Rebuildable in-memory index. Only changed files are read again. */
 export class VocabularyIndex extends Component {
-	private cache = new Map<string, { signature: string; saved: SavedEntry | null }>();
+	private cache = new Map<string, { signature: string; saved: SavedEntry | null; forms: string[] }>();
 	private listeners = new Set<() => void>();
 	private timer: ReturnType<typeof setTimeout> | undefined;
 	private tail: Promise<void> = Promise.resolve();
@@ -39,7 +41,7 @@ export class VocabularyIndex extends Component {
 					alive.add(path);
 					const signature = `${file.stat.mtime}:${file.stat.size}`;
 					if (this.cache.get(path)?.signature === signature) continue;
-					try { this.cache.set(path, { signature, saved: await this.store.read(path) }); }
+					try { const saved = await this.store.read(path); this.cache.set(path, { signature, saved, forms: saved ? [saved.entry.word, ...entryForms(saved.entry)].map(normalizeWord) : [] }); }
 					catch { this.cache.delete(path); }
 				}
 				for (const path of this.cache.keys()) if (!alive.has(path)) this.cache.delete(path);
@@ -55,10 +57,15 @@ export class VocabularyIndex extends Component {
 	}
 	all(): SavedEntry[] { return this.ordered; }
 	find(entry: DictionaryEntry): SavedEntry | undefined { return this.identities.get(entryKey(entry)); }
+	resolve(query: string, language = ''): SavedEntry[] {
+		const key = normalizeWord(query), noun = germanNounPhrase(query);
+		return this.ordered.filter(({entry, path}) => (!language || entry.languageCode === language) &&
+			this.cache.get(path)?.forms.some(form => form === key || (entry.languageCode === 'de' && noun && form === normalizeWord(noun))));
+	}
 	search(query = '', language = ''): SavedEntry[] {
 		const key = searchKey(query);
-		return this.ordered.filter(({ entry }) => (!language || entry.languageCode === language) &&
-			[entry.word, ...(entry.aliases || [])].some(value => searchKey(value).includes(key)));
+		return this.ordered.filter(({ entry, path }) => (!language || entry.languageCode === language) &&
+			this.cache.get(path)?.forms.some(value => searchKey(value).includes(key)));
 	}
 	languages(preferred = ''): { code: string; name: string }[] {
 		const languages = new Map<string, string>();

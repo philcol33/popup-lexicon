@@ -1,3 +1,4 @@
+import { aspectMarkdown, type AspectRelation } from './aspect';
 import { TFile, TFolder, type Vault } from 'obsidian';
 import { parseMarkdown, writeMarkdown, writeEncounter } from './markdown';
 import { dictionaryRoot, safeFilename } from './paths';
@@ -53,6 +54,30 @@ export class VocabularyStore {
 		return added;
 	}
 
+	/** Insert aspect links near the headword; update only source URLs in an existing Aspect section. */
+	async linkAspects(path: string, relations: AspectRelation[]): Promise<void> {
+		await this.update(path, markdown => {
+			const section = /^## Aspect[ \t]*\r?$/mi.exec(markdown);
+			if (!section) {
+				const first = /^## /m.exec(markdown);
+				const position = first?.index ?? markdown.length;
+				return markdown.slice(0, position).trimEnd() + '\n\n## Aspect\n\n' + aspectMarkdown(relations) + '\n\n' + markdown.slice(position);
+			}
+			const start = section.index + section[0].length, next = /^## /m.exec(markdown.slice(start));
+			const end = next ? start + next.index : markdown.length;
+			let body = markdown.slice(start, end);
+			for (const relation of relations) {
+				if (!relation.path) continue;
+				const target = relation.path.split('/').map(encodeURIComponent).join('/');
+				body = body.replace(/\[([^\]]+)\]\((https:\/\/pl\.wiktionary\.org\/wiki\/[^)]+)\)/g, (link, label: string, url: string) => {
+					let word: string; try { word = decodeURIComponent(url.split('/wiki/')[1].split('#')[0]).replace(/_/g, ' '); } catch { return link; }
+					return word === relation.word ? `[${label}](${target})` : link;
+				});
+			}
+			return markdown.slice(0, start) + body + markdown.slice(end);
+		});
+	}
+
 	/** Add missing learning sections only; never rewrite existing user content. */
 	async appendLearningDetails(path: string, incoming: DictionaryEntry): Promise<boolean> {
 		let added = false;
@@ -60,12 +85,16 @@ export class VocabularyStore {
 			const current = parseMarkdown(markdown)!;
 			if (entryKey(current) !== entryKey(incoming)) throw new Error('The saved entry has changed.');
 			const additions: string[] = [];
-			for (const [heading, key] of [['Grammar','grammar'], ['Conjugation','conjugation'], ['Inflection','inflection'], ['Usage notes','usageNotes'], ['Example sentences','usageExamples']] as const) {
+			for (const [heading, key] of [['Etymology','etymology'], ['Grammar','grammar'], ['Conjugation','conjugation'], ['Inflection','inflection'], ['Usage notes','usageNotes'], ['Example sentences','usageExamples']] as const) {
 				// An empty existing section may be intentional; leave it untouched as well.
 				if (new RegExp(`^## ${heading}[ \t]*$`, 'mi').test(markdown.replace(/\r/g, ''))) continue;
 				const value = incoming[key]; if (!value?.length) continue;
 				const body = Array.isArray(value) ? value.map(ex => ex.split('\n').map(line => `> ${line}`).join('\n')).join('\n\n') : value;
-				additions.push(`## ${heading}\n\n${body}`);
+				if (heading === 'Etymology' && current.languageCode !== 'pl') {
+					const position = /^## /m.exec(markdown)?.index ?? markdown.length;
+					markdown = markdown.slice(0, position).trimEnd() + '\n\n## Etymology\n\n' + body + '\n\n' + markdown.slice(position);
+					added = true;
+				} else additions.push(`## ${heading}\n\n${body}`);
 			}
 			if (!additions.length) return markdown;
 			added = true;

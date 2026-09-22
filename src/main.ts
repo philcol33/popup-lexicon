@@ -42,10 +42,14 @@ export default class PopupLexiconPlugin extends Plugin {
 		this.index = this.addChild(new VocabularyIndex(this.store));
 		this.popup = new DefinitionPopup(() => this.settings, (container, result, language) => {
 			if (!this.settings.showAddButton && !language.needsLookup && !language.unavailable) return;
-			renderEntryActions(container, this, fromWiktionary(result, language), this.currentEncounter, async () => {
-				const resolved = await this.dict.lookupLanguage(result.word, language);
+			renderEntryActions(container, this, fromWiktionary(result, language), this.currentEncounter, async (_value, resolved) => {
 				this.popup.replaceLanguage(result.word, resolved);
 			});
+		}, async (word, code) => {
+			await this.openDictionary();
+			const view = this.app.workspace.getLeavesOfType(DICTIONARY_VIEW)[0]?.view as DictionaryView | undefined;
+			await view?.openWord(word, code);
+			this.popup.hide();
 		});
 		this.popup.setHoverHandlers(
 			() => this.cancelLeave(),

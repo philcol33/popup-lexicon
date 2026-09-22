@@ -1,3 +1,5 @@
+import type { AspectRelation } from './vocabulary/aspect';
+import { inflectionLemma, inflectionChoices, germanNounPhrase } from './lookup/wordForms';
 import { fetchNativeSection } from "./lookup/nativeWiktionary";
 import { requestUrl, type RequestUrlResponse } from "obsidian";
 
@@ -18,6 +20,12 @@ export interface Entry {
 }
 
 export interface LangSection {
+	aspects?: AspectRelation[];
+	/** Confirmed canonical identity and the queried inflected form, per language. */
+	headword?: string;
+	lookupForm?: string;
+	lemma?: string;
+	lemmaChoices?: string[];
 	edition?: string;
 	sourceUrl?: string;
 	pronunciation?: string;
@@ -108,7 +116,7 @@ export class DictionaryClient {
 				// At most two automatic native requests. Remaining languages are available on demand.
 				let nativeCount = 0;
 				const resolved = await Promise.all(languages.map(async language => {
-					if (language.code === 'en') return { ...language, definitionLanguage: 'en', contentKind: 'definition' as const };
+					if (language.code === 'en') return this.lookupLanguage(result.word, language);
 					if (++nativeCount <= 2) return this.lookupLanguage(result.word, language);
 					return { ...language, entries: [], needsLookup: true, edition: language.code,
 						sourceUrl: `https://${language.code}.wiktionary.org/wiki/${encodeURIComponent(result.word)}`,
@@ -132,16 +140,45 @@ export class DictionaryClient {
 	/** Shared lazy loader: each native edition request is cached/coalesced across all interfaces. */
 	lookupLanguage(word: string, language: LangSection): Promise<LangSection> {
 		const target = this.getLanguagePolicy?.().polishTranslationLanguage || 'de';
-		const key = `${language.code}:${target}:${word}`;
+		const key = JSON.stringify([language.code, target, word, language.lemma, language.lookupForm]);
 		const cached = this.nativeCache.get(key);
 		if (cached && cached.expires > Date.now()) return Promise.resolve(cached.value);
 		const pending = this.nativeInflight.get(key); if (pending) return pending;
-		const request = fetchNativeSection(word, language, target).then(value => {
+		const request = this.resolveLanguage(word, language, target).then(value => {
 			this.nativeCache.set(key, { value, expires: value.unavailable ? Date.now() + 30000 : Infinity });
 			if (this.nativeCache.size > CACHE_LIMIT) this.nativeCache.delete(this.nativeCache.keys().next().value!);
 			return value;
 		}).finally(() => this.nativeInflight.delete(key));
 		this.nativeInflight.set(key, request); return request;
+	}
+
+	private async resolveLanguage(word: string, language: LangSection, target: string): Promise<LangSection> {
+		let headword = word, current = language;
+		const visited = new Set<string>([word]);
+		try {
+			// Lazy loads retain discovery metadata. When absent, rediscover only the requested language.
+			if (!current.entries.length && !current.lemma && !current.needsLookup) {
+				const discovery = await this.fetchAndParse(word, 'en');
+				current = discovery?.langs.find(section => section.code === language.code) || current;
+			}
+			for (let depth = 0; current.lemma; depth++) {
+				if (depth >= 4 || visited.has(current.lemma)) throw new Error('Could not resolve an unambiguous base entry.');
+				headword = current.lemma; visited.add(headword);
+				const result = await this.fetchAndParse(headword, 'en');
+				const base = result?.langs.find(section => section.code === language.code);
+				if (!base) throw new Error('The linked base entry is unavailable.');
+				current = base;
+			}
+			const value = language.code === 'en' ? { ...current, edition: 'en', sourceUrl: this.wiktionaryPageUrl(headword), definitionLanguage: 'en', contentKind: 'definition' as const } : await fetchNativeSection(headword, current, target);
+			if (language.code === 'en' && !value.etymology) {
+				const details = await fetchNativeSection(headword, current, target);
+				value.etymology = details.etymology;
+				value.pronunciation ||= details.pronunciation;
+			}
+			return { ...value, headword, lemmaChoices: current.lemmaChoices, lookupForm: language.lookupForm || (word !== headword ? word : undefined) };
+		} catch (error) {
+			return { ...language, entries: [], needsLookup: false, unavailable: error instanceof Error ? error.message : 'Could not resolve the base entry.' };
+		}
 	}
 
 	private put(key: string, value: DictionaryResult | null): void {
@@ -163,6 +200,12 @@ export class DictionaryClient {
 		if (lower !== word) {
 			const alt = await this.fetchOne(lower, edition);
 			if (alt) return alt;
+		}
+		const noun = germanNounPhrase(word);
+		if (noun) {
+			const result = await this.fetchOne(noun, edition);
+			const german = result?.langs.find(lang => lang.code === 'de');
+			if (result && german?.entries.some(entry => /noun/i.test(entry.partOfSpeech))) return { ...result, word: noun, langs: [{ ...german, lookupForm: word }] };
 		}
 		return null;
 	}
@@ -251,7 +294,10 @@ export class DictionaryClient {
 				}
 			}
 
-			if (entries.length > 0) langs.push({ code, name, entries });
+			if (entries.length > 0) {
+				const language = { code, name, entries }, lemma = inflectionLemma(language);
+				langs.push({ ...language, lemma, lemmaChoices: lemma ? undefined : inflectionChoices(language).filter(candidate => candidate !== word) });
+			}
 		}
 
 		if (langs.length === 0) return null;

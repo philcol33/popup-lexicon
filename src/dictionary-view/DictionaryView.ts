@@ -2,7 +2,7 @@ import { NavigationHistory } from "./history";
 import { getWordAtPoint } from "../wordDetection";
 import { Component, ItemView, type WorkspaceLeaf } from 'obsidian';
 import type PopupLexiconPlugin from '../main';
-import { fromWiktionary } from '../vocabulary/adapter';
+import { fromWiktionary, withAvailableDetails } from '../vocabulary/adapter';
 import { renderEntryActions } from '../vocabulary/actions';
 import { entryKey, normalizeWord, type SavedEntry, type DictionaryEntry } from '../vocabulary/types';
 import { renderDefinition } from './DefinitionView';
@@ -129,12 +129,15 @@ export class DictionaryView extends ItemView {
 		this.pane.empty();
 		const article = this.pane.createEl('article');
 		this.refreshList();
-		try { await renderDefinition(this.app, article, value.entry, this.rendered, value.path || '', () => generation === this.generation); }
+		try { await renderDefinition(this.app, article, value.entry, this.rendered, value.path || '', () => generation === this.generation, async (word, code) => {
+			await this.openWord(word, code);
+		}); }
 		catch (e) { if (generation === this.generation) this.emptyState(e instanceof Error ? e.message : 'Could not display entry.'); return; }
 		if (generation !== this.generation) return;
 		renderEntryActions(article.createDiv({ cls: 'lexicon-actions' }), this.plugin, value.entry, undefined, async entry => {
 			if (generation !== this.generation) return;
-			await this.show({ ...value, entry, alternatives: value.alternatives?.map(candidate => candidate.languageCode === entry.languageCode ? entry : candidate) }, false);
+			const saved = this.plugin.index.find(entry);
+			await this.show({ ...value, path: saved?.path, entry: saved ? withAvailableDetails(saved.entry, entry) : entry, alternatives: value.alternatives?.map(candidate => candidate.languageCode === entry.languageCode ? entry : candidate) }, false);
 		});
 		if (value.alternatives && value.alternatives.length > 1) {
 			const choices = this.pane.createDiv({ cls: 'lexicon-result-languages' }); this.pane.prepend(choices);
@@ -144,10 +147,18 @@ export class DictionaryView extends ItemView {
 			}
 		}
 	}
+	async openWord(word: string, code: string): Promise<void> {
+		const saved = this.plugin.index.all().find(value => normalizeWord(value.entry.word) === normalizeWord(word) && value.entry.languageCode === code);
+		if (saved) { await this.show(saved); return; }
+		this.language = code;
+		await this.lookup(word);
+	}
 	async lookup(word: string): Promise<void> {
 		word = word.trim(); if (!word) return;
-		const local = this.plugin.index.search(word, this.language).find(saved => normalizeWord(saved.entry.word) === normalizeWord(word) || saved.entry.aliases?.some(alias => normalizeWord(alias) === normalizeWord(word)));
-		if (local) { await this.show(local); return; }
+		const exact = this.plugin.index.search(word, this.language).filter(saved => normalizeWord(saved.entry.word) === normalizeWord(word));
+		const matches = exact.length ? exact : this.plugin.index.resolve(word, this.language);
+		const local = matches.length === 1 ? matches[0] : undefined;
+		if (local) { await this.show({ ...local, entry: { ...local.entry, lookupForm: word !== local.entry.word ? word : undefined } }); return; }
 		const generation = ++this.generation;
 		this.current = undefined;
 		this.pane.empty(); this.pane.createDiv({ cls: 'lexicon-status', text: `Looking up “${word}”…` });
@@ -160,7 +171,9 @@ export class DictionaryView extends ItemView {
 			const filtered = result.langs.filter(lang => allow.includes(lang.code.toLowerCase()));
 			const languages = filtered.length ? filtered : result.langs;
 			const first = languages.find(lang => lang.code === this.language) || languages.find(lang => preferred.includes(lang.code)) || languages[0];
-			await this.show({ entry: fromWiktionary(result, first), alternatives: languages.map(lang => fromWiktionary(result, lang)) });
+			const entry = fromWiktionary(result, first);
+			const saved = this.plugin.index.find(entry);
+			await this.show({ ...(saved || { entry }), entry: saved ? withAvailableDetails(saved.entry, entry) : entry, alternatives: languages.map(lang => fromWiktionary(result, lang)) });
 		} catch (e) { if (generation === this.generation) this.emptyState(e instanceof Error ? e.message : 'Lookup failed.'); }
 	}
 }

@@ -1,4 +1,4 @@
-import { polishField, polishConjugation, portablePolishHtml } from './polishGrammar';
+import { polishField, polishConjugation, portablePolishHtml, polishAspects } from './polishGrammar';
 import { requestUrl, sanitizeHTMLToDom } from 'obsidian';
 import type { Definition, Entry, LangSection } from '../dictionary';
 
@@ -98,18 +98,20 @@ export function parseNativePage(page: ParsedPage, language: LangSection): LangSe
 			}
 		}
 	}
+	const inflection = document.createElement('div');
+	for (const table of [...section.querySelectorAll('table.inflection-table')]) inflection.append(clean(table));
 	const nonempty = entries.filter(entry => entry.definitions.length);
 	if (!nonempty.length) return null;
 	return {
 		code: language.code, name: language.name, entries: nonempty,
 		edition: language.code, sourceUrl: `https://${language.code}.wiktionary.org/wiki/${encodeURIComponent(page.title)}`,
-		pronunciation: pronunciation(section), etymology: etymology || undefined,
+		pronunciation: pronunciation(section), etymology: etymology || undefined, inflection: portablePolishHtml(inflection),
 		definitionLanguage: language.code, contentKind: 'definition'
 	};
 }
 
 /** Polish is the deliberate exception: read the German translation list on Polish Wiktionary. */
-export function parsePolishTranslations(page: ParsedPage, target: string): LangSection | null {
+export function parsePolishTranslations(page: ParsedPage, target: string, word = page.title): LangSection | null {
 	const section = languageSection(page.text, 'pl', 'Polish');
 	if (!section) return null;
 	const marker = section.querySelector('[data-field="tlumaczenia"]');
@@ -145,7 +147,7 @@ export function parsePolishTranslations(page: ParsedPage, target: string): LangS
 	return { code: 'pl' , name: 'Polish', entries: definitions.length ? [{ partOfSpeech: `Translations → ${languageLabel(target, 'en')}`, definitions }] : [],
 		edition: 'pl', sourceUrl: `https://pl.wiktionary.org/wiki/${encodeURIComponent(page.title)}`,
 		pronunciation: pronunciation(section), definitionLanguage: target, contentKind: 'translation',
-		grammar: portablePolishHtml(grammar), conjugation: polishConjugation(inflection), inflection: portablePolishHtml(inflection),
+		aspects: polishAspects(grammar, word), grammar: portablePolishHtml(grammar), conjugation: polishConjugation(inflection), inflection: portablePolishHtml(inflection),
 		usageExamples: [...examples.querySelectorAll(':scope > dd, :scope > p')].map(html).filter(value => value.replace(/<[^>]+>/g, '').trim()),
 		usageNotes: portablePolishHtml(notes), etymology: portablePolishHtml(polishField(section, 'etymologia')) };
 }
@@ -164,7 +166,7 @@ export async function fetchNativeSection(word: string, language: LangSection, po
 		const data = response.json;
 		if (!data?.parse?.text) return unavailable('No native entry was found on this Wiktionary edition.');
 		const page = data.parse as ParsedPage;
-		const result = language.code === 'pl' ? parsePolishTranslations(page, polishTarget) : parseNativePage(page, language);
+		const result = language.code === 'pl' ? parsePolishTranslations(page, polishTarget, word) : parseNativePage(page, language);
 		return result || unavailable(language.code === 'pl' ? `No ${languageLabel(polishTarget, 'en')} translations were found.` : 'No native definitions could be read from this page. Open the source to check it.');
 	} catch { return unavailable('Could not load the native Wiktionary entry. Check your connection and try again.'); }
 }

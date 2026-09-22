@@ -84,3 +84,17 @@ Cards retain aspect/partner information, Polish example sentences, syntax, collo
 For existing notes, use **Load Polish details**, then **Add missing grammar & examples**. Only absent sections are appended; existing content and manual edits are preserved. New entries save learning details automatically as editable Markdown, ready offline. The save-examples setting also controls the new example section.
 
 Grammar reference: [University of Silesia conjugation chart](https://www.sjikp.us.edu.pl/wp-content/uploads/2020/11/koniugacje-4.pdf). Actual forms come from each entry's linked Polish Wiktionary source.
+
+## Inflected forms
+
+Look up forms such as **lubisz → lubić**, **des Hauses → Haus**, **houses → house**, **chevaux → cheval**, or **mangeaient → manger**. The shared lookup client follows explicit grammatical form-of links, separately for each language, before loading the base entry's native definitions. English stays English, French stays French, and Polish retains German translations. New notes use the base headword; existing base notes are reused without overwriting them.
+
+When a spelling has independent senses or several possible lemmas, **Possible base words** buttons let you choose instead of silently merging distinct words (for example, English *went* has go/wend links and a separate noun sense). Resolution is bounded and detects cycles. Missing source relationships are not guessed from suffixes. German article + noun phrases are handled after the complete phrase has no entry.
+
+Saved aliases and conjugation/inflection tables are searchable offline. Form keys are rebuilt from Markdown when a note changes; examples and general prose do not create form matches. German native declension tables are now retained. New saves made through an inflected lookup retain that queried form as an alias. Existing notes without the relevant table/alias may still need an online lookup.
+
+### Aspect partners and etymology
+
+Polish entries show explicitly documented aspect partners immediately below the headword: for example, *aspekt dokonany od:* **robić** in **zrobić**. Saving creates or reuses the directly linked partner and connects both local Markdown entries. The partner stays a separate word. Links open the local Dictionary view, and repeated saves preserve personal edits. If the partner lookup fails, the main entry stays saved and the save action can retry. Existing Polish grammar notes are also read for documented aspect links.
+
+For other languages, available etymology appears before meanings in the popup, Dictionary view and new Markdown notes. Older entries can use **Load etymology**, then **Add missing details** to retain it without replacing existing definitions. Polish retains its grammar-oriented order and German translations.

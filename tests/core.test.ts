@@ -157,3 +157,46 @@ test('adding learning details preserves manual sections, handles repeats and val
  assert.equal(vault.contents.get(saved.path),changed);
  await assert.rejects(store.appendLearningDetails(saved.path,{...incoming,word:'bić'}),/changed/);
 });
+
+test('inflected lookups reuse canonical notes and offline form keys follow edited tables',async()=>{
+ const {vault,store}=setup();
+ const canonical: DictionaryEntry={word:'lubić',languageCode:'pl',languageName:'Polish',partsOfSpeech:[],conjugation:'| Osoba | Forma |\n| --- | --- |\n| ty | lubisz |'};
+ const original=(await store.save(canonical)).saved;
+ const duplicate=await store.save({...canonical,lookupForm:'lubisz',aliases:['lubisz']});
+ assert.equal(duplicate.created,false);assert.equal(duplicate.saved.path,original.path);assert.equal((await store.list()).length,1);
+ const index=new VocabularyIndex(store);index.load();await index.ready;
+ assert.equal(index.resolve('lubisz','pl')[0]?.path,original.path);assert.equal(index.search('lubisz')[0]?.path,original.path);
+ assert.equal(index.resolve('lubisz','de').length,0);
+ const file=vault.getAbstractFileByPath(original.path) as TFile;
+ await vault.process(file,text=>text.replace('lubisz','lubią'));await index.refresh(true);
+ assert.equal(index.resolve('lubisz').length,0);assert.equal(index.resolve('lubią')[0]?.path,original.path);
+ index.unload();
+});
+
+import { saveWithAspectPartners } from '../src/vocabulary/saveRelated';
+test('saving a perfective creates its imperfective once and links both local entries',async()=>{
+ const {vault,store}=setup();let requests=0;
+ const perfective:DictionaryEntry={word:'zrobić',languageCode:'pl',languageName:'Polish',partsOfSpeech:[],aspects:[{kind:'perfective',word:'robić',sourceUrl:'https://pl.wiktionary.org/wiki/robi%C4%87'}]};
+ const lookup=async(word:string):Promise<DictionaryEntry>=>{requests++;return{word,languageCode:'pl',languageName:'Polish',partsOfSpeech:[{type:'Translations → German',meanings:[{definition:'machen'}]}]};};
+ const result=await saveWithAspectPartners(store,perfective,lookup);assert.equal(requests,1);assert.equal((await store.list()).length,2);
+ const root=await store.read(result.saved.path);assert.equal(root!.entry.aspects![0].path,'Dictionary/Polish/robić.md');
+ const partner=(await store.find({...perfective,word:'robić'}))!;assert.equal(partner.entry.aspects![0].path,result.saved.path);
+ const file=vault.getAbstractFileByPath(partner.path) as TFile;await vault.process(file,text=>text+'\n## Personal note\n\nKeep this.\n');const before=vault.contents.get(partner.path);
+ await saveWithAspectPartners(store,perfective,lookup);assert.equal(requests,1);assert.equal((await store.list()).length,2);assert.equal(vault.contents.get(partner.path),before);
+});
+test('unavailable aspect partner preserves the main entry and reports a retryable partial save',async()=>{
+ const {store}=setup();const value:DictionaryEntry={word:'zrobić',languageCode:'pl',languageName:'Polish',partsOfSpeech:[],aspects:[{kind:'perfective',word:'robić'}]};
+ const result=await saveWithAspectPartners(store,value,async()=>{throw Error('Offline');});
+ assert.equal(result.warnings.length,1);assert.equal((await store.list()).length,1);assert.equal(result.saved.entry.aspects![0].path,undefined);
+});
+
+test('enriching an older non-Polish note inserts etymology before meanings without rewriting them',async()=>{
+ const {vault,store}=setup();const saved=(await store.save(entry)).saved;
+ const before=(await store.read(saved.path))!.entry.partsOfSpeech;
+ await store.appendLearningDetails(saved.path,{...entry,etymology:'A documented origin.'});
+ const text=vault.contents.get(saved.path)!;
+ assert.ok(text.indexOf('## Etymology')<text.indexOf(`## ${entry.partsOfSpeech[0].type}`));
+ assert.deepEqual((await store.read(saved.path))!.entry.partsOfSpeech,before);
+ assert.equal(await store.appendLearningDetails(saved.path,{...entry,etymology:'Different source text.'}),false);
+ assert.equal(vault.contents.get(saved.path),text);
+});

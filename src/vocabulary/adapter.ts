@@ -22,19 +22,20 @@ function markdown(html: string, edition: string, word: string): string {
 	return htmlToMarkdown(fragment).trim().replace(/LEXICONTABLEPLACEHOLDER(\d+)END/g, (_, index) => '\n\n' + tables[Number(index)] + '\n\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 export function fromWiktionary(result: DictionaryResult, language: LangSection): DictionaryEntry {
-	const convert = (value?: string) => value ? markdown(value, language.edition || result.edition, result.word) : undefined;
+	const word = language.headword || result.word;
+	const convert = (value?: string) => value ? markdown(value, language.edition || result.edition, word) : undefined;
 	return {
-		grammar: convert(language.grammar), conjugation: convert(language.conjugation), inflection: convert(language.inflection),
+		aspects: language.aspects, grammar: convert(language.grammar), conjugation: convert(language.conjugation), inflection: convert(language.inflection),
 		usageNotes: convert(language.usageNotes), usageExamples: language.usageExamples?.map(value => convert(value)!),
-		word: result.word, pronunciation: language.pronunciation,
-		etymology: language.etymology ? markdown(language.etymology, language.edition || result.edition, result.word) : undefined,
+		word, lookupForm: language.lookupForm, lookupLemma: language.lemma, lemmaChoices: language.lemmaChoices, aliases: language.lookupForm ? [language.lookupForm] : undefined, pronunciation: language.pronunciation,
+		etymology: language.etymology ? markdown(language.etymology, language.edition || result.edition, word) : undefined,
 		definitionLanguage: language.definitionLanguage, contentKind: language.contentKind, unavailable: language.unavailable, needsLookup: language.needsLookup,
 		languageCode: language.code, languageName: language.name,
 		partsOfSpeech: language.entries.map(entry => ({
 			type: entry.partOfSpeech || 'Definition',
 			meanings: entry.definitions.map(def => ({
-				definition: markdown(def.html, language.edition || result.edition, result.word),
-				examples: def.examples.map(ex => markdown(ex, language.edition || result.edition, result.word))
+				definition: markdown(def.html, language.edition || result.edition, word),
+				examples: def.examples.map(ex => markdown(ex, language.edition || result.edition, word))
 			}))
 		})),
 		source: { provider: 'Wiktionary', url: language.sourceUrl || result.url, license: 'CC BY-SA 4.0' }
@@ -52,4 +53,13 @@ export function forSaving(entry: DictionaryEntry, settings: PopupLexiconSettings
 				.map(m => ({ ...m, examples: settings.saveExamples ? m.examples : undefined }))
 		}))
 	};
+}
+
+/** Display fetched optional details alongside the user's existing definitions. */
+export function withAvailableDetails(existing: DictionaryEntry, source: DictionaryEntry): DictionaryEntry {
+ const result = { ...existing, lookupForm: source.lookupForm, lemmaChoices: source.lemmaChoices };
+ for (const key of ['grammar','conjugation','inflection','usageNotes','etymology'] as const) if (!result[key]) result[key] = source[key];
+ if (!result.usageExamples?.length) result.usageExamples = source.usageExamples;
+ if (!result.aspects?.length) result.aspects = source.aspects;
+ return result;
 }

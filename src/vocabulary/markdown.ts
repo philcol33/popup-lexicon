@@ -1,3 +1,4 @@
+import { aspectMarkdown, parseAspect, aspectsFromGrammar } from './aspect';
 import { parseYaml, stringifyYaml } from 'obsidian';
 import type { DictionaryEntry, Encounter, Meaning } from './types';
 
@@ -28,6 +29,8 @@ export function writeMarkdown(entry: DictionaryEntry): string {
 	}
 	const lines = ['---', stringifyYaml(metadata).trimEnd(), '---', '', `# ${inline(entry.word)}`, ''];
 	if (entry.pronunciation) lines.push(`/${inline(entry.pronunciation)}/`, '');
+	if (entry.aspects?.length) lines.push('## Aspect', '', aspectMarkdown(entry.aspects), '');
+	if (entry.etymology && entry.languageCode !== 'pl') lines.push('## Etymology', '', entry.etymology, '');
 	for (const part of entry.partsOfSpeech) {
 		lines.push(`## ${inline(part.type)}`, '');
 		part.meanings.forEach((meaning, i) => {
@@ -44,7 +47,7 @@ export function writeMarkdown(entry: DictionaryEntry): string {
 		lines.push('## Example sentences', '');
 		for (const example of entry.usageExamples) lines.push(...example.split('\n').map(line => `> ${line}`), '');
 	}
-	if (entry.etymology) lines.push('## Etymology', '', entry.etymology, '');
+	if (entry.etymology && entry.languageCode === 'pl') lines.push('## Etymology', '', entry.etymology, '');
 	if (entry.source) {
 		lines.push('## Source', '', entry.source.url ? `[${entry.source.provider}](${entry.source.url})` : entry.source.provider);
 		if (entry.source.license) lines.push(`Definitions © ${entry.source.provider} contributors, ${entry.source.license}.`);
@@ -82,6 +85,7 @@ export function parseMarkdown(markdown: string): DictionaryEntry | null {
 		if (/^example sentences$/i.test(heading)) {
 			entry.usageExamples = body.split(/\n\s*\n/).filter(Boolean).map(value => value.replace(/^> ?/gm, '')); continue;
 		}
+		if (/^aspect$/i.test(heading)) { entry.aspects = parseAspect(body); continue; }
 		if (/^etymology$/i.test(heading)) { entry.etymology = body; continue; }
 		if (/^source$/i.test(heading)) continue;
 		if (/^encounters$/i.test(heading)) {
@@ -113,5 +117,6 @@ export function parseMarkdown(markdown: string): DictionaryEntry | null {
 		if (!meanings.length && body) meanings.push({ definition: body });
 		if (meanings.length) entry.partsOfSpeech.push({ type: heading, meanings });
 	}
+	if (entry.languageCode === 'pl' && !entry.aspects && entry.grammar) entry.aspects = aspectsFromGrammar(entry.grammar, entry.word);
 	return entry;
 }

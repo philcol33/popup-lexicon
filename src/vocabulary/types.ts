@@ -1,3 +1,4 @@
+import type { AspectRelation } from './aspect';
 export interface Meaning {
 	/** Portable Markdown, not raw external HTML. */
 	definition: string;
@@ -7,6 +8,11 @@ export interface Meaning {
 }
 export interface Encounter { sourcePath: string; context: string; date: string }
 export interface DictionaryEntry {
+	aspects?: AspectRelation[];
+	/** Display-only query; identity is always word + languageCode. */
+	lookupForm?: string;
+	lookupLemma?: string;
+	lemmaChoices?: string[];
 	word: string;
 	definitionLanguage?: string;
 	contentKind?: 'definition' | 'translation';

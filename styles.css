@@ -185,3 +185,5 @@
 .lexicon-grammar th, .lexicon-grammar td { padding: 0.35em 0.65em; border: 1px solid var(--background-modifier-border); text-align: left; min-width: 5em; }
 .lexicon-grammar th { background: var(--background-secondary); }
 .lexicon-grammar h3 { font-size: var(--font-ui-medium); }
+
+.lexicon-aspect { margin: 0.5em 0 0.8em; }
