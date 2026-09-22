@@ -18,11 +18,29 @@ export function renderEntryActions(container: HTMLElement, plugin: PopupLexiconP
 		}
 		return;
 	}
-	if (!entry.partsOfSpeech.length) return;
+	if (entry.languageCode === 'pl' && !entry.grammar && !entry.inflection && onResolved) {
+		const load = container.createEl('button', { text: 'Load Polish details' });
+		load.onclick = async () => {
+			load.disabled = true;
+			try { const language = await plugin.dict.lookupLanguage(entry.word, { code: 'pl', name: entry.languageName, entries: [] }); await onResolved(fromWiktionary({ word: entry.word, edition: 'pl', url: language.sourceUrl || '', langs: [language] }, language)); }
+			catch (e) { new Notice(String(e)); }
+			finally { load.disabled = false; }
+		};
+	}
+	if (!entry.partsOfSpeech.length && !entry.grammar && !entry.inflection) return;
 	const save = container.createEl('button', { text: '+ Add to Dictionary' });
 	let saved: SavedEntry | undefined;
 	let append: HTMLButtonElement | undefined;
+	let enrich: HTMLButtonElement | undefined;
 	const refresh = () => {
+		if (saved && !enrich && (['grammar','conjugation','inflection','usageExamples','usageNotes'] as const).some(key => entry[key]?.length && !saved!.entry[key]?.length)) {
+			enrich = container.createEl('button', { text: 'Add missing grammar & examples' });
+			enrich.onclick = async () => {
+				enrich!.disabled = true;
+				try { const changed = await plugin.store.appendLearningDetails(saved!.path, forSaving(entry, plugin.settings)); new Notice(changed ? 'Added missing learning sections. Existing text preserved.' : 'Learning sections already saved.'); enrich!.textContent = '✓ Details saved'; }
+				catch (e) { new Notice(String(e)); enrich!.disabled = false; }
+			};
+		}
 		save.textContent = saved ? '✓ Saved · Open entry' : '+ Add to Dictionary';
 		if (saved && encounter && !append) {
 			append = container.createEl('button', { text: 'Add encounter' });

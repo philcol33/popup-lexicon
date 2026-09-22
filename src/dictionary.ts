@@ -21,6 +21,12 @@ export interface LangSection {
 	edition?: string;
 	sourceUrl?: string;
 	pronunciation?: string;
+	/** HTML in lookup results; portable Markdown in saved entries. */
+	grammar?: string;
+	conjugation?: string;
+	inflection?: string;
+	usageExamples?: string[];
+	usageNotes?: string;
 	etymology?: string;
 	definitionLanguage?: string;
 	contentKind?: 'definition' | 'translation';

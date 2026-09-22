@@ -150,6 +150,12 @@ export class DefinitionPopup {
 					}
 				}
 			}
+			if (lang.contentKind === 'translation' && !lang.entries.length && lang.grammar) sec.createDiv({ cls: 'popup-lexicon-status', text: 'No translation listed on this source page. Grammar and examples follow.' });
+			if (lang.grammar) sec.createDiv({ cls: 'lexicon-grammar' }).append(sanitizeHTMLToDom(lang.grammar));
+			if (settings.showExamples) for (const example of (lang.usageExamples || []).slice(0, MAX_EXAMPLES)) sec.createDiv({ cls: 'popup-lexicon-example' }).append(sanitizeHTMLToDom(example));
+			for (const [label, value] of [['Conjugation', lang.conjugation], ['Full inflection', lang.inflection], ['Usage notes', lang.usageNotes]]) {
+				if (value) { const details = sec.createEl('details', { cls: 'lexicon-grammar' }); details.createEl('summary', { text: label }); details.createDiv().append(sanitizeHTMLToDom(value)); }
+			}
 			if (lang.etymology) {
 				const details = sec.createEl('details'); details.createEl('summary', { text: 'Etymology' });
 				details.createDiv().appendChild(sanitizeHTMLToDom(lang.etymology));

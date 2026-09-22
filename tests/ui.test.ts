@@ -126,3 +126,46 @@ test('ambiguous words load at most two native editions automatically and expose 
  await Promise.all([client.lookupLanguage('test', deferred), client.lookupLanguage('test', deferred)]);
  assert.equal(calls.length, 4);
 });
+
+import { readFileSync } from 'node:fs';
+import { conjugationGroup } from '../src/lookup/polishGrammar';
+import { parseMarkdown, writeMarkdown } from '../src/vocabulary/markdown';
+import { forSaving } from '../src/vocabulary/adapter';
+function polishFixture(word: string) { return JSON.parse(readFileSync(`tests/fixtures/polish/${word}.json`, 'utf8')); }
+test('learner groups use attested ja/ty forms, including reflexives and suffix exceptions', () => {
+ for (const [ja, ty, group] of [['czytam','czytasz','-m, -sz'],['rozumiem','rozumiesz','-m, -sz'],['wiem','wiesz','-m, -sz'],['robię','robisz','-ę, -isz'],['uczę się','uczysz się','-ę, -ysz'],['pracuję','pracujesz','-ę, -esz'],['biję','bijesz','-ę, -esz']]) assert.equal(conjugationGroup(ja,ty),group);
+ assert.equal(conjugationGroup('jestem','jesteś'),undefined);
+ assert.equal(conjugationGroup('formę / inną','formisz'),undefined);
+});
+test('real Polish pages retain translations, aspect, examples and source conjugations', () => {
+ for(const [word, group, form] of [['pracować','-ę, -esz','pracują'], ['robić','-ę, -isz','robią'], ['bić','-ę, -esz','biją'], ['wiedzieć','-m, -sz','wiedzą'], ['uczyć się','-ę, -ysz','uczą się']]) {
+  const result = parsePolishTranslations(polishFixture(word), 'de')!;
+  assert.ok(result, word); assert.match(result.grammar!, /czasownik/);
+  assert.ok(result.conjugation!.includes(group),word); assert.ok(result.conjugation!.includes(form),word);
+  assert.ok(result.usageExamples!.length,word); assert.ok(result.inflection!.includes('czas przeszły'),word);
+  assert.doesNotMatch(result.inflection!, /<style|display:|<script/);
+ }
+ const irregular = parsePolishTranslations(polishFixture('być'),'de')!;
+ assert.match(irregular.conjugation!, /nieregularna/); assert.match(irregular.conjugation!, /są/);
+ const wiedziec = parsePolishTranslations(polishFixture('wiedzieć'),'de')!;
+ assert.match(wiedziec.conjugation!, /Besonderheit.*wiedzą/);
+ const perfective = parsePolishTranslations(polishFixture('zrobić'),'de')!;
+ assert.match(perfective.conjugation!, /Czas przyszły prosty/); assert.doesNotMatch(perfective.conjugation!, /Präsens/);
+ const noun = parsePolishTranslations(polishFixture('dom'),'de')!;
+ assert.equal(noun.conjugation,undefined); assert.match(noun.inflection!, /domami/);
+});
+test('conjugation and merged inflection tables survive Markdown and offline rendering', async () => {
+ const language = parsePolishTranslations(polishFixture('pracować'),'de')!;
+ const entry = fromWiktionary({word:'pracować',edition:'pl',url:language.sourceUrl!,langs:[language]},language);
+ assert.match(entry.conjugation!, /\| ja \| pracuję \|/);
+ assert.match(entry.inflection!, /\| czas przeszły \| m \| pracowałem/);
+ assert.match(entry.inflection!, /\| czas przeszły \| ż \| pracowałam/);
+ assert.match(entry.inflection!, /będziemy/); assert.match(entry.inflection!, /forma potencjalna/);
+ const saved = parseMarkdown(writeMarkdown(entry))!;
+ for(const key of ['grammar','conjugation','inflection','usageExamples','usageNotes'] as const) assert.deepEqual(saved[key],entry[key]);
+ const modified = parseMarkdown(writeMarkdown(entry).replace('pracuję','MOJA FORMA'))!;
+ assert.match(modified.conjugation!,/MOJA FORMA/);
+ assert.equal(forSaving(entry,{...DEFAULT_SETTINGS,saveExamples:false}).usageExamples,undefined);
+ const root=document.createElement('div'); await renderDefinition({} as never,root,saved,new Component() as never);
+ assert.match(root.textContent!, /Conjugation/); assert.match(root.textContent!, /pracuję/); assert.match(root.textContent!,/Rolnik/);
+});

@@ -143,3 +143,17 @@ test('upstream lookup coalesces requests, retains multilingual senses and retrie
  setRequestHandler(async () => { throw Error('Offline'); });
  await assert.rejects(new DictionaryClient(() => 'en').lookup('test'), /offline/);
 });
+
+test('adding learning details preserves manual sections, handles repeats and validates identity', async () => {
+ const { vault, store } = setup();
+ const base = { ...entry, word: 'robić', languageCode: 'pl', languageName: 'Polish', grammar: 'My own grammar note.' };
+ const saved = (await store.save(base)).saved;
+ const original = vault.contents.get(saved.path)! + '\n## Private notes\n\nKeep this exactly.\n'; vault.contents.set(saved.path, original);
+ const incoming = { ...base, grammar: 'Source grammar', conjugation: '| ja | robię |', usageExamples: ['Robię obiad.'] };
+ assert.equal(await store.appendLearningDetails(saved.path,incoming),true);
+ const changed = vault.contents.get(saved.path)!;
+ assert.ok(changed.startsWith(original.trimEnd())); assert.ok(changed.includes('My own grammar note.')); assert.ok(!changed.includes('Source grammar'));
+ assert.equal(await store.appendLearningDetails(saved.path,incoming),false);
+ assert.equal(vault.contents.get(saved.path),changed);
+ await assert.rejects(store.appendLearningDetails(saved.path,{...incoming,word:'bić'}),/changed/);
+});

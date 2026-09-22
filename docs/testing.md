@@ -25,3 +25,9 @@ The temporary runtime harness is separate from the production plugin and is disa
 ## Further release QA
 
 Check light theme, split panes, slow/offline transitions and keyboard navigation in a normal interactive session when changing UI behavior. Mobile-specific polish and detached pop-out windows are outside the first implementation; upstream listeners remain attached to the main window. Native template coverage is intentionally conservative: source pages that cannot be parsed never fall back to another language.
+
+## Polish grammar (0.5.0)
+
+Offline fixtures cover pracować, robić, bić, być, zrobić, wiedzieć, uczyć się and dom. Checks cover learner groups based on attested forms, -ić exceptions, irregular/reflexive forms, perfective future labelling, source examples, merged/nested tables, editable Markdown round trips and missing-section enrichment without overwrites. Fixtures have source/licence attribution.
+
+`scripts/live-polish.ts` runs only in `Popup Lexicon Test`. Five live entries passed native-source lookup, six-person table rendering, popup rendering, save/read and actual Obsidian Markdown rendering. These sample entries remain available in the test vault. The temporary QA plugin is disabled and removed after verification.

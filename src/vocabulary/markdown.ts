@@ -37,6 +37,13 @@ export function writeMarkdown(entry: DictionaryEntry): string {
 			if (meaning.antonyms?.length) lines.push(`   Antonyms: ${meaning.antonyms.join(', ')}`, '');
 		});
 	}
+	for (const [label, value] of [['Grammar', entry.grammar], ['Conjugation', entry.conjugation], ['Inflection', entry.inflection], ['Usage notes', entry.usageNotes]]) {
+		if (value) lines.push(`## ${label}`, '', value, '');
+	}
+	if (entry.usageExamples?.length) {
+		lines.push('## Example sentences', '');
+		for (const example of entry.usageExamples) lines.push(...example.split('\n').map(line => `> ${line}`), '');
+	}
 	if (entry.etymology) lines.push('## Etymology', '', entry.etymology, '');
 	if (entry.source) {
 		lines.push('## Source', '', entry.source.url ? `[${entry.source.provider}](${entry.source.url})` : entry.source.provider);
@@ -70,6 +77,11 @@ export function parseMarkdown(markdown: string): DictionaryEntry | null {
 		const split = section.indexOf('\n');
 		const heading = (split < 0 ? section : section.slice(0, split)).trim();
 		const body = split < 0 ? '' : section.slice(split + 1).trim();
+		const extra = ([['grammar', 'grammar'], ['conjugation', 'conjugation'], ['inflection', 'inflection'], ['usage notes', 'usageNotes']] as const).find(([name]) => name === heading.toLowerCase())?.[1];
+		if (extra) { entry[extra] = body; continue; }
+		if (/^example sentences$/i.test(heading)) {
+			entry.usageExamples = body.split(/\n\s*\n/).filter(Boolean).map(value => value.replace(/^> ?/gm, '')); continue;
+		}
 		if (/^etymology$/i.test(heading)) { entry.etymology = body; continue; }
 		if (/^source$/i.test(heading)) continue;
 		if (/^encounters$/i.test(heading)) {

@@ -44,3 +44,9 @@ The original endpoint provides English glosses. The requested final policy is En
 Final flow: upstream word detection → shared cached discovery → native section / Polish translations → popup or DictionaryEntry adapter → shared browser renderer → Vault Markdown → rebuildable index → offline browser.
 
 Native page formats vary. Lack of native definitions, unsupported page structure, unavailable editions or rate limits produce an explicit unavailable result with a source link. Such results cannot be saved as vocabulary. The English REST parser and word-boundary algorithms remain intact apart from a maximum input length guard.
+
+## Polish grammar details
+
+`lookup/polishGrammar.ts` extracts field-marked source sections and builds six-person cards from the attested present/simple-future rows. Group classification uses ja/ty, never infinitive suffixes. Ambiguous forms are not guessed. The shared result/entry models carry grammar, conjugation, inflection, example sentences and usage notes (HTML at the source boundary; Markdown after adaptation). `vocabulary/htmlTables.ts` expands merged cells and separates nested tables for portable Markdown. The Markdown body is authoritative for every added field.
+
+Explicit enrichment uses Vault.process to append only missing learning sections. It validates word/language identity and leaves even deliberately empty existing sections unchanged. Normal duplicate saves still never overwrite.

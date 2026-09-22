@@ -1,3 +1,4 @@
+import { tableMarkdown } from './htmlTables';
 import { htmlToMarkdown, sanitizeHTMLToDom } from 'obsidian';
 import type { DictionaryResult, LangSection } from '../dictionary';
 import type { PopupLexiconSettings } from '../settings';
@@ -12,10 +13,19 @@ function markdown(html: string, edition: string, word: string): string {
 		else if (href.startsWith('./')) a.setAttribute('href', `https://${edition}.wiktionary.org/wiki/${href.slice(2)}`);
 		else if (href.startsWith('/')) a.setAttribute('href', `https://${edition}.wiktionary.org${href}`);
 	});
-	return htmlToMarkdown(fragment).trim();
+	const tables: string[] = [];
+	for (const table of [...fragment.querySelectorAll('table')].filter(table => !table.parentElement?.closest('table'))) {
+		const value = [table, ...table.querySelectorAll('table')].map(tableMarkdown).filter(Boolean).join('\n\n');
+		const token = `LEXICONTABLEPLACEHOLDER${tables.length}END`;
+		tables.push(value); const p = document.createElement('p'); p.textContent = token; table.replaceWith(p);
+	}
+	return htmlToMarkdown(fragment).trim().replace(/LEXICONTABLEPLACEHOLDER(\d+)END/g, (_, index) => '\n\n' + tables[Number(index)] + '\n\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 export function fromWiktionary(result: DictionaryResult, language: LangSection): DictionaryEntry {
+	const convert = (value?: string) => value ? markdown(value, language.edition || result.edition, result.word) : undefined;
 	return {
+		grammar: convert(language.grammar), conjugation: convert(language.conjugation), inflection: convert(language.inflection),
+		usageNotes: convert(language.usageNotes), usageExamples: language.usageExamples?.map(value => convert(value)!),
 		word: result.word, pronunciation: language.pronunciation,
 		etymology: language.etymology ? markdown(language.etymology, language.edition || result.edition, result.word) : undefined,
 		definitionLanguage: language.definitionLanguage, contentKind: language.contentKind, unavailable: language.unavailable, needsLookup: language.needsLookup,
@@ -33,6 +43,7 @@ export function fromWiktionary(result: DictionaryResult, language: LangSection):
 export function forSaving(entry: DictionaryEntry, settings: PopupLexiconSettings): DictionaryEntry {
 	return {
 		...entry,
+		usageExamples: settings.saveExamples ? entry.usageExamples : undefined,
 		pronunciation: settings.savePronunciation ? entry.pronunciation : undefined,
 		phonetics: settings.savePronunciation ? entry.phonetics : undefined,
 		etymology: settings.saveEtymology ? entry.etymology : undefined,

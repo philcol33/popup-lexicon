@@ -8,6 +8,7 @@ export async function renderDefinition(app: App, root: HTMLElement, entry: Dicti
 	root.createDiv({ cls: 'lexicon-language-label', text: entry.languageName });
 	root.createEl('h1', { text: entry.word });
 	if (entry.contentKind === 'translation') root.createDiv({ cls: 'lexicon-content-language', text: `Translations → ${languageLabel(entry.definitionLanguage || 'de', 'en')}` });
+	if (entry.contentKind === 'translation' && !entry.partsOfSpeech.length && entry.grammar) root.createDiv({ cls: 'lexicon-status', text: 'No translation listed on this source page. Grammar and examples are available below.' });
 	if (entry.unavailable) root.createDiv({ cls: 'lexicon-status', text: entry.unavailable });
 	const phonetics = [entry.pronunciation, ...(entry.phonetics || [])].filter(Boolean).join(' · ');
 	if (phonetics) root.createDiv({ cls: 'lexicon-phonetics', text: phonetics });
@@ -26,6 +27,16 @@ export async function renderDefinition(app: App, root: HTMLElement, entry: Dicti
 		}
 	}
 	if (!isCurrent()) return;
+	for (const [label, value] of [['Grammar', entry.grammar], ['Conjugation', entry.conjugation]]) {
+		if (value) { root.createEl('h2', { cls: 'lexicon-section-label', text: label }); await markdown(value, root.createDiv({ cls: 'lexicon-grammar' })); }
+	}
+	if (entry.usageExamples?.length) {
+		root.createEl('h2', { cls: 'lexicon-section-label', text: 'Example sentences' });
+		for (const example of entry.usageExamples) await markdown(example, root.createDiv({ cls: 'lexicon-example' }));
+	}
+	for (const [label, value] of [['Full inflection', entry.inflection], ['Usage notes', entry.usageNotes]]) {
+		if (value) { const details = root.createEl('details', { cls: 'lexicon-grammar' }); details.createEl('summary', { text: label }); await markdown(value, details.createDiv()); }
+	}
 	if (entry.etymology) {
 		root.createEl('h2', { cls: 'lexicon-section-label', text: 'Etymology' });
 		await markdown(entry.etymology, root.createDiv());

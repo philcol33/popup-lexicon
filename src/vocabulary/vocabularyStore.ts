@@ -53,6 +53,27 @@ export class VocabularyStore {
 		return added;
 	}
 
+	/** Add missing learning sections only; never rewrite existing user content. */
+	async appendLearningDetails(path: string, incoming: DictionaryEntry): Promise<boolean> {
+		let added = false;
+		await this.update(path, markdown => {
+			const current = parseMarkdown(markdown)!;
+			if (entryKey(current) !== entryKey(incoming)) throw new Error('The saved entry has changed.');
+			const additions: string[] = [];
+			for (const [heading, key] of [['Grammar','grammar'], ['Conjugation','conjugation'], ['Inflection','inflection'], ['Usage notes','usageNotes'], ['Example sentences','usageExamples']] as const) {
+				// An empty existing section may be intentional; leave it untouched as well.
+				if (new RegExp(`^## ${heading}[ \t]*$`, 'mi').test(markdown.replace(/\r/g, ''))) continue;
+				const value = incoming[key]; if (!value?.length) continue;
+				const body = Array.isArray(value) ? value.map(ex => ex.split('\n').map(line => `> ${line}`).join('\n')).join('\n\n') : value;
+				additions.push(`## ${heading}\n\n${body}`);
+			}
+			if (!additions.length) return markdown;
+			added = true;
+			return markdown.trimEnd() + '\n\n' + additions.join('\n\n') + '\n';
+		});
+		return added;
+	}
+
 	private async ensureFolder(path: string): Promise<void> {
 		let current = '';
 		for (const part of path.split('/')) {

@@ -1,3 +1,4 @@
+import { polishField, polishConjugation, portablePolishHtml } from './polishGrammar';
 import { requestUrl, sanitizeHTMLToDom } from 'obsidian';
 import type { Definition, Entry, LangSection } from '../dictionary';
 
@@ -124,10 +125,29 @@ export function parsePolishTranslations(page: ParsedPage, target: string): LangS
 		}
 		block = block.nextElementSibling;
 	}
-	if (!definitions.length) return null;
-	return { code: 'pl', name: 'Polish', entries: [{ partOfSpeech: `Translations → ${languageLabel(target, 'en')}`, definitions }],
+	const meanings = polishField(section, 'znaczenia');
+	const grammar = document.createElement('div');
+	// Grammar paragraphs identify POS, aspect and its partner; definition lists stay separate.
+	for (const p of [...meanings.querySelectorAll(':scope > p')]) if (p.querySelector('i')) grammar.append(p.cloneNode(true));
+	const inflection = polishField(section, 'odmiana');
+	if (!definitions.length && !portablePolishHtml(grammar) && !portablePolishHtml(inflection)) return null;
+	const notes = document.createElement('div');
+	if (!definitions.length) {
+		const p = document.createElement('p'); p.textContent = `No ${languageLabel(target, 'en')} translation is listed on this source page. Grammar and examples are still available.`; notes.append(p);
+		// Perfective entries may link to their imperfective partner instead of listing translations.
+		for (const p of [...polishField(section, 'tlumaczenia').querySelectorAll(':scope > p, :scope > dd')]) if (p.textContent?.trim()) notes.append(p.cloneNode(true));
+	}
+	for (const [field, label] of [['skladnia', 'Składnia'], ['kolokacje', 'Kolokacje'], ['uwagi', 'Uwagi']]) {
+		const content = portablePolishHtml(polishField(section, field));
+		if (content) { const h = document.createElement('h3'); h.textContent = label; notes.append(h, sanitizeHTMLToDom(content)); }
+	}
+	const examples = polishField(section, 'przyklady');
+	return { code: 'pl' , name: 'Polish', entries: definitions.length ? [{ partOfSpeech: `Translations → ${languageLabel(target, 'en')}`, definitions }] : [],
 		edition: 'pl', sourceUrl: `https://pl.wiktionary.org/wiki/${encodeURIComponent(page.title)}`,
-		pronunciation: pronunciation(section), definitionLanguage: target, contentKind: 'translation' };
+		pronunciation: pronunciation(section), definitionLanguage: target, contentKind: 'translation',
+		grammar: portablePolishHtml(grammar), conjugation: polishConjugation(inflection), inflection: portablePolishHtml(inflection),
+		usageExamples: [...examples.querySelectorAll(':scope > dd, :scope > p')].map(html).filter(value => value.replace(/<[^>]+>/g, '').trim()),
+		usageNotes: portablePolishHtml(notes), etymology: portablePolishHtml(polishField(section, 'etymologia')) };
 }
 
 export async function fetchNativeSection(word: string, language: LangSection, polishTarget = 'de'): Promise<LangSection> {

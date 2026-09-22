@@ -18,6 +18,12 @@ export interface DictionaryEntry {
 	pronunciation?: string;
 	phonetics?: string[];
 	partsOfSpeech: { type: string; meanings: Meaning[] }[];
+	/** HTML in lookup results; portable Markdown in saved entries. */
+	grammar?: string;
+	conjugation?: string;
+	inflection?: string;
+	usageExamples?: string[];
+	usageNotes?: string;
 	etymology?: string;
 	source?: { provider: string; url?: string; license?: string };
 	created?: string;

@@ -178,3 +178,10 @@
 .lexicon-navigation { display: flex; gap: 2px; }
 .lexicon-navigation button { box-shadow: none; background: transparent; font-size: 21px; padding: 0 9px; color: var(--text-muted); }
 .lexicon-navigation button:disabled { opacity: .3; }
+
+.lexicon-grammar { overflow-x: auto; margin-block: 0.7em; }
+.lexicon-grammar summary { cursor: pointer; color: var(--text-muted); }
+.lexicon-grammar table { border-collapse: collapse; font-size: var(--font-small); margin-block: 0.7em; }
+.lexicon-grammar th, .lexicon-grammar td { padding: 0.35em 0.65em; border: 1px solid var(--background-modifier-border); text-align: left; min-width: 5em; }
+.lexicon-grammar th { background: var(--background-secondary); }
+.lexicon-grammar h3 { font-size: var(--font-ui-medium); }
